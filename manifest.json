@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "AutoPin Shopee",
+  "short_name": "AutoPin Shopee",
+  "version": "1.0.0",
+  "minimum_chrome_version": "116",
+  "description": "Kumpulkan produk dan shortlink Shopee Affiliate, lalu siapkan dan publikasikan Pin ke Pinterest.",
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "permissions": [
+    "alarms",
+    "notifications",
+    "offscreen",
+    "sidePanel",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://affiliate.shopee.co.id/*",
+    "https://*.shopee.co.id/*",
+    "https://*.shopee.sg/*",
+    "https://*.pinimg.com/*",
+    "https://www.pinterest.com/*",
+    "https://id.pinterest.com/*",
+    "https://api.openai.com/*",
+    "https://openrouter.ai/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "action": {
+    "default_title": "Buka AutoPin Shopee",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://affiliate.shopee.co.id/*",
+        "https://*.shopee.co.id/*"
+      ],
+      "js": ["src/content/shopee.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.pinterest.com/*",
+        "https://id.pinterest.com/*"
+      ],
+      "js": ["src/content/pinterest.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data: blob: https://*.shopee.co.id https://*.shopee.sg https://*.pinimg.com; connect-src https://*.shopee.co.id https://*.shopee.sg https://api.openai.com https://openrouter.ai https://generativelanguage.googleapis.com"
+  }
+}

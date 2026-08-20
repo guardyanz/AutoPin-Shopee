@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutoPin Shopee</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true"><i data-lucide="workflow"></i></div>
+      <div class="brand-copy">
+        <strong>AutoPin Shopee</strong>
+        <span id="connection-label">Shopee Affiliate → Pinterest</span>
+      </div>
+      <button class="icon-button" id="refresh-dashboard" type="button" title="Refresh status" aria-label="Refresh status">
+        <i data-lucide="refresh-cw"></i>
+      </button>
+    </header>
+
+    <nav class="tabs" aria-label="Main views">
+      <button class="tab is-active" type="button" data-tab="dashboard"><i data-lucide="gauge"></i><span>Dashboard</span></button>
+      <button class="tab" type="button" data-tab="activity"><i data-lucide="logs"></i><span>Activity</span></button>
+      <button class="tab" type="button" data-tab="settings"><i data-lucide="settings-2"></i><span>Settings</span></button>
+    </nav>
+
+    <main>
+      <section class="view is-active" id="view-dashboard" aria-labelledby="dashboard-title">
+        <div class="status-band">
+          <div class="status-heading">
+            <span class="status-dot" id="status-dot"></span>
+            <div>
+              <span class="eyebrow" id="status-state">Idle</span>
+              <h1 id="dashboard-title">Ready to run preflight</h1>
+            </div>
+          </div>
+          <div class="quota" aria-label="Daily publication quota">
+            <strong id="quota-count">0</strong>
+            <span>/ 10</span>
+          </div>
+        </div>
+
+        <div class="progress-track" aria-hidden="true"><span id="quota-progress"></span></div>
+
+        <dl class="run-metadata">
+          <div>
+            <dt>Current product</dt>
+            <dd id="current-product">No product selected</dd>
+          </div>
+          <div>
+            <dt>Next action</dt>
+            <dd id="next-action">Not scheduled</dd>
+          </div>
+        </dl>
+
+        <div class="run-controls" aria-label="Automation controls">
+          <button class="button button-primary" id="start-button" type="button"><i data-lucide="play"></i><span>Start</span></button>
+          <button class="button" id="pause-button" type="button"><i data-lucide="pause"></i><span>Pause</span></button>
+          <button class="button" id="resume-button" type="button"><i data-lucide="rotate-ccw"></i><span>Resume</span></button>
+          <button class="icon-button icon-button-danger" id="stop-button" type="button" title="Stop automation" aria-label="Stop automation"><i data-lucide="square"></i></button>
+        </div>
+
+        <section class="section-block" aria-labelledby="pipeline-title">
+          <div class="section-heading">
+            <h2 id="pipeline-title">Pipeline</h2>
+            <span id="updated-at">Not started</span>
+          </div>
+          <ol class="pipeline" id="pipeline-list">
+            <li data-stage-group="source"><span>1</span><div><strong>Shopee source</strong><small>Discovery, product data, affiliate link</small></div></li>
+            <li data-stage-group="creative"><span>2</span><div><strong>Creative</strong><small>Copy validation and poster render</small></div></li>
+            <li data-stage-group="publish"><span>3</span><div><strong>Pinterest</strong><small>Form, publish, verification</small></div></li>
+          </ol>
+        </section>
+
+        <section class="section-block" aria-labelledby="recent-title">
+          <div class="section-heading">
+            <h2 id="recent-title">Recent pins</h2>
+            <button class="text-button" type="button" data-open-tab="activity">View activity</button>
+          </div>
+          <div class="empty-state" id="recent-empty">No verified pins yet</div>
+          <ul class="publication-list" id="publication-list"></ul>
+        </section>
+      </section>
+
+      <section class="view" id="view-activity" aria-labelledby="activity-title">
+        <div class="page-heading">
+          <div>
+            <span class="eyebrow">Audit trail</span>
+            <h1 id="activity-title">Activity</h1>
+          </div>
+          <span class="count-badge" id="activity-count">0</span>
+        </div>
+        <ul class="activity-list" id="activity-list"></ul>
+        <div class="empty-state" id="activity-empty">No activity recorded</div>
+      </section>
+
+      <section class="view" id="view-settings" aria-labelledby="settings-title">
+        <div class="page-heading">
+          <div>
+            <span class="eyebrow">Configuration</span>
+            <h1 id="settings-title">Settings</h1>
+          </div>
+          <span class="save-state" id="save-state"></span>
+        </div>
+
+        <form id="settings-form">
+          <fieldset class="field-group">
+            <legend>AI provider</legend>
+            <div class="segmented-control" id="provider-segments">
+              <button type="button" data-provider="openrouter" class="is-active">OpenRouter</button>
+              <button type="button" data-provider="openai">OpenAI</button>
+              <button type="button" data-provider="gemini">Gemini</button>
+            </div>
+          </fieldset>
+
+          <div class="field-group">
+            <label for="api-key">API key</label>
+            <div class="input-with-action">
+              <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
+              <button class="icon-button input-action" id="toggle-key" type="button" title="Show API key" aria-label="Show API key"><i data-lucide="eye"></i></button>
+            </div>
+          </div>
+
+          <div class="settings-actions">
+            <button class="button" id="test-provider" type="button"><i data-lucide="plug-zap"></i><span>Test</span></button>
+            <button class="button" id="fetch-models" type="button"><i data-lucide="download"></i><span>Fetch Models</span></button>
+          </div>
+
+          <div class="field-group">
+            <label for="primary-model">Primary model</label>
+            <select id="primary-model"><option value="">Select a model</option></select>
+          </div>
+
+          <div class="field-group">
+            <label for="fallback-model">Fallback model</label>
+            <select id="fallback-model"><option value="">No fallback</option></select>
+          </div>
+
+          <div class="field-group">
+            <label for="board-name">Pinterest board</label>
+            <input id="board-name" type="text" readonly placeholder="Created after research" />
+          </div>
+
+          <div class="field-group">
+            <label for="discovery-pages">Halaman Shopee yang dipindai</label>
+            <input id="discovery-pages" type="number" min="1" max="10" step="1" />
+          </div>
+
+          <label class="toggle-row" for="dry-run">
+            <span><strong>Developer dry run</strong><small>Stop after filling the Pinterest form</small></span>
+            <input id="dry-run" type="checkbox" />
+          </label>
+
+          <div class="compliance-row">
+            <i data-lucide="shield-check"></i>
+            <span><strong>10 pins/day</strong><small>#affiliate · 8–12 hour window</small></span>
+          </div>
+
+          <button class="button button-primary button-full" type="submit"><i data-lucide="save"></i><span>Save Settings</span></button>
+        </form>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="./sidepanel.ts"></script>
+  </body>
+</html>
