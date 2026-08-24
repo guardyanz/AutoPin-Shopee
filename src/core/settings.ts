@@ -1,4 +1,5 @@
 import type { ProviderId, ProviderModel } from './types'
+import type { PinterestApiEnvironment } from '../providers/pinterest-api'
 
 export interface ProviderConfiguration {
   apiKey: string
@@ -19,6 +20,12 @@ export interface AutomationSettings {
   researchKeywords: string[]
   researchUpdatedAt: number | null
   discoveryMaxPages: number
+  pinterestEnvironment: PinterestApiEnvironment
+  pinterestOAuthWorkerUrl: string
+  pinterestAccessToken: string
+  pinterestRefreshToken: string
+  pinterestTokenExpiresAt: number | null
+  pinterestBoardId: string
   developerDryRun: boolean
 }
 
@@ -49,7 +56,13 @@ export const DEFAULT_SETTINGS: AutomationSettings = {
   researchKeywords: [],
   researchUpdatedAt: null,
   discoveryMaxPages: 3,
-  developerDryRun: false,
+  pinterestEnvironment: 'sandbox',
+  pinterestOAuthWorkerUrl: '',
+  pinterestAccessToken: '',
+  pinterestRefreshToken: '',
+  pinterestTokenExpiresAt: null,
+  pinterestBoardId: '',
+  developerDryRun: true,
 }
 
 export function validateSettingsForStart(settings: AutomationSettings): string[] {
@@ -57,5 +70,7 @@ export function validateSettingsForStart(settings: AutomationSettings): string[]
   const errors: string[] = []
   if (!active.apiKey.trim()) errors.push('api_key_required')
   if (!active.primaryModel.trim()) errors.push('primary_model_required')
+  if (!settings.pinterestAccessToken.trim()) errors.push('pinterest_token_required')
+  if (!/^\d+$/.test(settings.pinterestBoardId.trim())) errors.push('pinterest_board_id_required')
   return errors
 }

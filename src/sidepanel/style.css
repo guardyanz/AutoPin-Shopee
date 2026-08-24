@@ -31,7 +31,7 @@ body {
   font-size: 13px;
 }
 
-button, input, select { font: inherit; letter-spacing: 0; }
+button, input, select, textarea { font: inherit; letter-spacing: 0; }
 button { cursor: pointer; }
 
 .app-header {
@@ -111,6 +111,14 @@ dt { color: var(--muted); }
 dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 
 .run-controls { display: grid; grid-template-columns: minmax(88px, 1.4fr) minmax(78px, 1fr) minmax(84px, 1fr) 38px; gap: 7px; margin-top: 14px; }
+.approval-button { grid-column: 1 / -1; }
+.review-panel { border: 1px solid #bdd6d4; border-radius: 14px; background: #f2f9f8; padding: 14px; }
+.review-poster { display: block; width: min(100%, 260px); aspect-ratio: 2 / 3; object-fit: cover; margin: 12px auto; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+.review-product { margin: 10px 0 14px; font-weight: 700; }
+.review-panel .field-group { margin-top: 12px; }
+.review-metadata { margin-top: 14px; }
+.review-metadata a { display: block; color: var(--cyan); overflow-wrap: anywhere; }
+.review-note { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
 .button, .icon-button {
   min-height: 36px;
   display: inline-flex;
@@ -167,7 +175,9 @@ dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 form { display: grid; gap: 15px; }
 .field-group { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: 7px; }
 .field-group label, .field-group legend { color: var(--ink); font-size: 12px; font-weight: 650; }
-input, select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--ink); background: var(--surface); outline: none; }
+input, select, textarea { width: 100%; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--ink); background: var(--surface); outline: none; }
+input, select { height: 38px; }
+textarea { padding-block: 9px; resize: vertical; }
 input:focus, select:focus { border-color: var(--cyan); box-shadow: 0 0 0 2px var(--cyan-soft); }
 input[readonly] { color: var(--muted); background: #f1f4f5; }
 

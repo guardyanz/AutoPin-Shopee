@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "autopin-shopee-oauth",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-24",
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_TRANSACTIONS",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID",
+      "preview_id": "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "sandbox",
+    "PINTEREST_REDIRECT_URI": "https://autopin-shopee-oauth.REPLACE_WITH_SUBDOMAIN.workers.dev/v1/oauth/pinterest/callback"
+  }
+}

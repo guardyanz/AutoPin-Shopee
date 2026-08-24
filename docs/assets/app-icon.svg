@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">AutoPin Shopee app icon</title>
+  <desc id="description">A coral location marker, dark product tag, and teal automation connector on a warm white square.</desc>
+  <rect width="1024" height="1024" rx="180" fill="#fffdfa"/>
+  <path d="M531 173c-127 0-230 103-230 230 0 165 230 380 230 380s230-215 230-380c0-127-103-230-230-230Z" fill="#f65b4d"/>
+  <circle cx="531" cy="399" r="86" fill="#fffdfa"/>
+  <path d="M670 432h121l126 126a45 45 0 0 1 0 64L806 733a45 45 0 0 1-64 0L616 607V486a54 54 0 0 1 54-54Z" fill="#26333a" stroke="#fffdfa" stroke-width="24"/>
+  <circle cx="691" cy="506" r="24" fill="#fffdfa"/>
+  <g fill="none" stroke="#087a7e" stroke-linecap="round" stroke-linejoin="round" stroke-width="26">
+    <path d="M153 446h94l44 44h78"/>
+    <path d="M130 554h119l42-42h78"/>
+    <path d="M167 661h86l43-67h93"/>
+  </g>
+  <g fill="#fffdfa" stroke="#087a7e" stroke-width="24">
+    <circle cx="130" cy="554" r="25"/>
+    <circle cx="153" cy="446" r="25"/>
+    <circle cx="167" cy="661" r="25"/>
+  </g>
+</svg>

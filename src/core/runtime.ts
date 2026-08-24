@@ -23,6 +23,7 @@ export interface RuntimePayload {
   activeProduct?: ProductCandidate
   generatedContent?: GeneratedPinContent
   posterDataUrl?: string
+  pinterestPinId?: string
   pinUrl?: string
   publicationConfirmed?: boolean
   provider?: ProviderId

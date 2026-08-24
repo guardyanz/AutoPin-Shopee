@@ -57,8 +57,35 @@
           <button class="button button-primary" id="start-button" type="button"><i data-lucide="play"></i><span>Start</span></button>
           <button class="button" id="pause-button" type="button"><i data-lucide="pause"></i><span>Pause</span></button>
           <button class="button" id="resume-button" type="button"><i data-lucide="rotate-ccw"></i><span>Resume</span></button>
+          <button class="button button-primary approval-button" id="approve-button" type="button" hidden><i data-lucide="shield-check"></i><span>Approve Pin</span></button>
           <button class="icon-button icon-button-danger" id="stop-button" type="button" title="Stop automation" aria-label="Stop automation"><i data-lucide="square"></i></button>
         </div>
+
+        <section class="section-block review-panel" id="review-panel" aria-labelledby="review-title" hidden>
+          <div class="section-heading">
+            <div><span class="eyebrow">Required review</span><h2 id="review-title">Approve one specific Pin</h2></div>
+          </div>
+          <img class="review-poster" id="review-poster" alt="Poster draft awaiting review" />
+          <p class="review-product" id="review-product"></p>
+          <div class="field-group">
+            <label for="review-pin-title">Pin title</label>
+            <input id="review-pin-title" type="text" maxlength="100" />
+          </div>
+          <div class="field-group">
+            <label for="review-description">Description</label>
+            <textarea id="review-description" maxlength="800" rows="5"></textarea>
+          </div>
+          <div class="field-group">
+            <label for="review-alt-text">Alt text</label>
+            <textarea id="review-alt-text" maxlength="500" rows="3"></textarea>
+          </div>
+          <dl class="run-metadata review-metadata">
+            <div><dt>Destination</dt><dd><a id="review-destination" target="_blank" rel="noreferrer"></a></dd></div>
+            <div><dt>Board</dt><dd id="review-board"></dd></div>
+          </dl>
+          <button class="button button-full" id="save-review" type="button"><i data-lucide="save"></i><span>Save reviewed draft</span></button>
+          <p class="review-note">Approval publishes only this displayed draft. Confirm rights, affiliate disclosure, destination link, Board, and timing.</p>
+        </section>
 
         <section class="section-block" aria-labelledby="pipeline-title">
           <div class="section-heading">
@@ -68,7 +95,7 @@
           <ol class="pipeline" id="pipeline-list">
             <li data-stage-group="source"><span>1</span><div><strong>Shopee source</strong><small>Discovery, product data, affiliate link</small></div></li>
             <li data-stage-group="creative"><span>2</span><div><strong>Creative</strong><small>Copy validation and poster render</small></div></li>
-            <li data-stage-group="publish"><span>3</span><div><strong>Pinterest</strong><small>Form, publish, verification</small></div></li>
+            <li data-stage-group="publish"><span>3</span><div><strong>Pinterest API</strong><small>Review, explicit approval, verification</small></div></li>
           </ol>
         </section>
 
@@ -137,9 +164,45 @@
           </div>
 
           <div class="field-group">
-            <label for="board-name">Pinterest board</label>
-            <input id="board-name" type="text" readonly placeholder="Created after research" />
+            <label for="pinterest-environment">Pinterest API environment</label>
+            <select id="pinterest-environment">
+              <option value="sandbox">Sandbox / Trial</option>
+              <option value="production">Production / Standard</option>
+            </select>
           </div>
+
+          <div class="field-group">
+            <label for="oauth-worker-url">OAuth callback service</label>
+            <input id="oauth-worker-url" type="url" inputmode="url" placeholder="https://autopin-shopee-oauth.example.workers.dev" />
+          </div>
+
+          <div class="settings-actions">
+            <button class="button" id="connect-pinterest" type="button"><i data-lucide="link-2"></i><span>Connect account</span></button>
+            <button class="button" id="disconnect-pinterest" type="button"><i data-lucide="unlink"></i><span>Disconnect</span></button>
+          </div>
+          <p class="save-state" id="pinterest-connection-state">Not connected</p>
+
+          <div class="field-group">
+            <label for="pinterest-token">Pinterest access token (Trial fallback)</label>
+            <input id="pinterest-token" type="password" autocomplete="off" spellcheck="false" placeholder="Use a short-lived Trial token during development" />
+          </div>
+
+          <div class="field-group">
+            <label for="pinterest-board-id">Pinterest board ID</label>
+            <input id="pinterest-board-id" type="text" inputmode="numeric" pattern="\d+" placeholder="Numeric Board ID owned by the connected account" />
+          </div>
+
+          <div class="field-group">
+            <label for="board-name">Board label</label>
+            <input id="board-name" type="text" placeholder="Used in local publication history" />
+          </div>
+
+          <div class="field-group">
+            <label for="board-description">Board description</label>
+            <textarea id="board-description" maxlength="500" rows="3" placeholder="Used only when you explicitly create a Board"></textarea>
+          </div>
+
+          <button class="button button-full" id="create-board" type="button"><i data-lucide="workflow"></i><span>Create this Board through API</span></button>
 
           <div class="field-group">
             <label for="discovery-pages">Halaman Shopee yang dipindai</label>
@@ -147,13 +210,13 @@
           </div>
 
           <label class="toggle-row" for="dry-run">
-            <span><strong>Developer dry run</strong><small>Stop after filling the Pinterest form</small></span>
+            <span><strong>Developer dry run</strong><small>Prepare and review; do not call Create Pin</small></span>
             <input id="dry-run" type="checkbox" />
           </label>
 
           <div class="compliance-row">
             <i data-lucide="shield-check"></i>
-            <span><strong>10 pins/day</strong><small>#affiliate · 8–12 hour window</small></span>
+            <span><strong>Per-Pin approval</strong><small>#affiliate · maximum 10 pins/day</small></span>
           </div>
 
           <button class="button button-primary button-full" type="submit"><i data-lucide="save"></i><span>Save Settings</span></button>

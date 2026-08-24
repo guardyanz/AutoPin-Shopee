@@ -6,6 +6,9 @@ describe('state machine', () => {
   it('allows the approved workflow and rejects speculative transitions', () => {
     expect(canTransition('idle', 'preflight')).toBe(true)
     expect(canTransition('extract_product', 'generate_affiliate_link')).toBe(true)
+    expect(canTransition('fill_pinterest', 'awaiting_approval')).toBe(true)
+    expect(canTransition('awaiting_approval', 'publish_pinterest')).toBe(true)
+    expect(canTransition('fill_pinterest', 'publish_pinterest')).toBe(false)
     expect(canTransition('publish_pinterest', 'verify_publication')).toBe(true)
     expect(canTransition('idle', 'publish_pinterest')).toBe(false)
     expect(canTransition('generate_copy', 'commit_result')).toBe(false)

@@ -3,7 +3,7 @@
 AutoPin Shopee adalah ekstensi Chrome Manifest V3 yang menghubungkan alur
 **Shopee Affiliate → Pinterest**. Produk diambil dari halaman penawaran Shopee,
 shortlink affiliate resmi dibuat dari sesi pengguna, materi Pin disiapkan, lalu
-form Pinterest diisi dan dipublikasikan dari profil Chrome khusus.
+setiap Pin ditinjau pengguna, lalu dipublikasikan melalui Pinterest API v5.
 
 Proyek ini mengganti sumber Adobe Stock pada konsep AutoPin dengan adapter
 Shopee yang terinspirasi dan diadaptasi dari
@@ -21,13 +21,12 @@ Shopee yang terinspirasi dan diadaptasi dari
   OpenRouter, OpenAI, atau Gemini dengan validasi konten faktual.
 - Merender poster Pinterest 1000 × 1500 secara lokal tanpa mengubah bentuk
   produk secara generatif.
-- Membuat/memilih board, mengisi form Pinterest, memublikasikan, dan memverifikasi
-  hasil sebelum menyimpan riwayat.
+- Memvalidasi Board milik akun terautentikasi, meminta persetujuan eksplisit untuk
+  setiap draft, membuat Pin melalui `POST /v5/pins`, lalu memverifikasi hasil.
 - Menyimpan checkpoint di IndexedDB, melanjutkan pekerjaan setelah browser hidup
   kembali, mencegah produk yang sama dipakai ulang selama 30 hari, dan membatasi
   publikasi sampai 10 Pin per hari.
-- Menyediakan mode **Developer dry run** yang berhenti sesudah form Pinterest
-  terisi dan sebelum tombol Publish ditekan.
+- Menyediakan mode **Developer dry run** yang berhenti sebelum request Create Pin.
 
 ## Arsitektur singkat
 
@@ -37,14 +36,13 @@ Shopee Affiliate pages
   → product detail + HD image
   → official affiliate shortlink
   → validated AI copy + local poster
-  → Pinterest form
-  → publish + verification
+  → per-Pin review + explicit approval
+  → Pinterest API v5 create + verification
   → local publication history
 ```
 
-Semua login tetap dilakukan pengguna. AutoPin Shopee tidak menyimpan password,
-tidak melewati CAPTCHA, dan menghentikan workflow saat autentikasi atau verifikasi
-manusia diperlukan.
+AutoPin Shopee tidak mengumpulkan password atau session cookie Pinterest, tidak
+melakukan scraping Pinterest, dan tidak mempunyai content script Pinterest.
 
 ## Build dan instalasi
 
@@ -61,21 +59,33 @@ Lalu buka `chrome://extensions`, aktifkan **Developer mode**, pilih
 Gunakan profil Chrome khusus otomasi, lalu login manual ke:
 
 1. `https://affiliate.shopee.co.id/offer/product_offer`
-2. Pinterest Business (`pinterest.com` atau `id.pinterest.com`)
+2. Pinterest Business yang telah memperoleh Trial API access.
 
 ## Konfigurasi dan penggunaan
 
 1. Buka side panel **AutoPin Shopee**.
 2. Di tab **Settings**, pilih provider AI dan isi API key.
 3. Klik **Fetch Models**, pilih model utama, dan simpan.
-4. Tentukan jumlah halaman Shopee yang akan dipindai (1–10).
-5. Aktifkan **Developer dry run** untuk percobaan pertama.
-6. Klik **Start** dari Dashboard.
-7. Periksa poster, copy, board, dan destination link di Pinterest.
-8. Setelah hasil benar, nonaktifkan dry run untuk publikasi otomatis.
+4. Masukkan product-limited Pinterest Trial token, pilih Sandbox, dan isi Board ID.
+5. Tentukan jumlah halaman Shopee yang akan dipindai (1–10).
+6. Biarkan **Developer dry run** aktif untuk percobaan pertama.
+7. Klik **Start**, lalu periksa poster, copy, disclosure, Board, jadwal, dan link.
+8. Nonaktifkan dry run dan tekan **Approve Pin** hanya untuk draft yang sudah benar.
 
-Nama board pertama kali dibuat dari sinyal pencarian Pinterest yang terlihat dan
-diperbarui paling cepat setiap 30 hari.
+Product-limited Trial token bersifat sementara. Untuk Standard access, gunakan
+OAuth Authorization Code melalui backend yang menjaga App Secret tetap server-side.
+
+## Pengajuan Pinterest API
+
+Paket pengajuan lengkap berada di
+[`docs/pinterest-submission/`](docs/pinterest-submission/README.md): jawaban form,
+scope, security/data flow, checklist Trial → Standard, ikon submission, dan skrip
+video demo. Website publik dan Privacy Policy berada di folder `docs/` dan akan
+dipublikasikan otomatis oleh GitHub Pages setelah repository di-push.
+
+OAuth callback service berada di [`oauth-worker/`](oauth-worker/README.md). Worker
+menjaga App Secret di server, memvalidasi state, menukar authorization code, dan
+memberikan token ke extension melalui one-time ticket singkat.
 
 ## Safety stop
 

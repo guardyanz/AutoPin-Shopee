@@ -15,10 +15,9 @@ export interface JobSnapshot {
 export interface PublicationRecord {
   id: string
   productId: string
+  productTitle: string
   productUrl: string
   affiliateUrl: string
-  pinUrl: string
-  boardName: string
   provider: ProviderId
   model: string
   publishedAt: number

@@ -58,6 +58,7 @@ export type JobState =
   | 'render_poster'
   | 'await_publish_slot'
   | 'fill_pinterest'
+  | 'awaiting_approval'
   | 'publish_pinterest'
   | 'verify_publication'
   | 'commit_result'

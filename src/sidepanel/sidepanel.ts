@@ -5,6 +5,7 @@ import {
   EyeOff,
   Gauge,
   Logs,
+  Link2,
   Pause,
   Play,
   PlugZap,
@@ -14,6 +15,7 @@ import {
   Settings2,
   ShieldCheck,
   Square,
+  Unlink,
   Workflow,
 } from 'lucide'
 
@@ -27,12 +29,25 @@ interface DashboardData {
   status: RuntimeStatus
   activity: ActivityEntry[]
   publications: PublicationRecord[]
+  review: PinReviewData | null
 }
 
-const iconSet = { Download, Eye, EyeOff, Gauge, Logs, Pause, Play, PlugZap, RefreshCw, RotateCcw, Save, Settings2, ShieldCheck, Square, Workflow }
+interface PinReviewData {
+  productTitle: string
+  posterDataUrl: string
+  title: string
+  description: string
+  altText: string
+  destinationUrl: string
+  boardId: string
+  boardLabel: string
+}
+
+const iconSet = { Download, Eye, EyeOff, Gauge, Link2, Logs, Pause, Play, PlugZap, RefreshCw, RotateCcw, Save, Settings2, ShieldCheck, Square, Unlink, Workflow }
 let settings: AutomationSettings | null = null
 let dashboard: DashboardData | null = null
 let toastTimer: number | undefined
+let renderedReviewKey = ''
 
 document.addEventListener('DOMContentLoaded', () => {
   createIcons({ icons: iconSet })
@@ -63,6 +78,8 @@ function bindControls(): void {
   element<HTMLButtonElement>('start-button').addEventListener('click', () => void runCommand({ type: 'START_AUTOMATION' }, 'Automation started'))
   element<HTMLButtonElement>('pause-button').addEventListener('click', () => void runCommand({ type: 'PAUSE_AUTOMATION' }, 'Automation paused'))
   element<HTMLButtonElement>('resume-button').addEventListener('click', () => void runCommand({ type: 'RESUME_AUTOMATION' }, 'Automation resumed'))
+  element<HTMLButtonElement>('approve-button').addEventListener('click', () => void approveCurrentPin())
+  element<HTMLButtonElement>('save-review').addEventListener('click', () => void savePinReview(true))
   element<HTMLButtonElement>('stop-button').addEventListener('click', () => void runCommand({ type: 'STOP_AUTOMATION' }, 'Automation stopped'))
 }
 
@@ -73,6 +90,9 @@ function bindSettings(): void {
   element<HTMLButtonElement>('toggle-key').addEventListener('click', toggleApiKey)
   element<HTMLButtonElement>('fetch-models').addEventListener('click', () => void fetchModels())
   element<HTMLButtonElement>('test-provider').addEventListener('click', () => void testProvider())
+  element<HTMLButtonElement>('connect-pinterest').addEventListener('click', () => void connectPinterest())
+  element<HTMLButtonElement>('disconnect-pinterest').addEventListener('click', () => void disconnectPinterest())
+  element<HTMLButtonElement>('create-board').addEventListener('click', () => void createPinterestBoard())
   element<HTMLFormElement>('settings-form').addEventListener('submit', (event) => {
     event.preventDefault()
     void persistSettings()
@@ -102,19 +122,44 @@ function renderDashboard(data: DashboardData): void {
   const dot = element('status-dot')
   dot.className = 'status-dot'
   if (['captcha_detected', 'circuit_open', 'authentication_required'].includes(status.state)) dot.classList.add('is-error')
-  else if (['paused', 'await_publish_slot'].includes(status.state)) dot.classList.add('is-warning')
+  else if (['paused', 'await_publish_slot', 'awaiting_approval'].includes(status.state)) dot.classList.add('is-warning')
   else if (!['idle', 'stopped', 'daily_limit_reached'].includes(status.state)) dot.classList.add('is-active')
 
   renderPipeline(status.state)
+  renderPinReview(data.review)
   renderPublications(data.publications)
   renderActivity(data.activity)
   updateControlStates(status.state)
 }
 
+function renderPinReview(review: PinReviewData | null): void {
+  const panel = element<HTMLElement>('review-panel')
+  panel.hidden = !review
+  if (!review) {
+    renderedReviewKey = ''
+    return
+  }
+  const key = `${review.productTitle}:${review.posterDataUrl.slice(-48)}`
+  if (key !== renderedReviewKey) {
+    element<HTMLImageElement>('review-poster').src = review.posterDataUrl
+    element('review-product').textContent = review.productTitle
+    element<HTMLInputElement>('review-pin-title').value = review.title
+    element<HTMLTextAreaElement>('review-description').value = review.description
+    element<HTMLTextAreaElement>('review-alt-text').value = review.altText
+    const destination = element<HTMLAnchorElement>('review-destination')
+    destination.href = review.destinationUrl
+    destination.textContent = review.destinationUrl
+    element('review-board').textContent = review.boardLabel
+      ? `${review.boardLabel} · ${review.boardId}`
+      : review.boardId
+    renderedReviewKey = key
+  }
+}
+
 function renderPipeline(state: string): void {
   const source = ['preflight', 'research_due_check', 'discover_products', 'select_candidate', 'extract_product', 'generate_affiliate_link']
   const creative = ['generate_copy', 'render_poster', 'await_publish_slot']
-  const publish = ['fill_pinterest', 'publish_pinterest', 'verify_publication', 'commit_result', 'cleanup']
+  const publish = ['fill_pinterest', 'awaiting_approval', 'publish_pinterest', 'verify_publication', 'commit_result', 'cleanup']
   const group = source.includes(state) ? 'source' : creative.includes(state) ? 'creative' : publish.includes(state) ? 'publish' : ''
   const order = ['source', 'creative', 'publish']
   document.querySelectorAll<HTMLElement>('[data-stage-group]').forEach((item) => {
@@ -128,16 +173,13 @@ function renderPublications(publications: PublicationRecord[]): void {
   const list = element<HTMLUListElement>('publication-list')
   list.replaceChildren(...publications.slice(0, 5).map((publication) => {
     const item = document.createElement('li')
-    const link = document.createElement('a')
-    link.href = publication.pinUrl
-    link.target = '_blank'
-    link.rel = 'noreferrer'
+    const content = document.createElement('div')
     const title = document.createElement('strong')
-    title.textContent = publication.boardName
+    title.textContent = publication.productTitle || 'Published Shopee product'
     const meta = document.createElement('span')
-    meta.textContent = `${publication.provider} · ${formatTime(publication.publishedAt)}`
-    link.append(title, meta)
-    item.append(link)
+    meta.textContent = `Verified publication · ${formatTime(publication.publishedAt)}`
+    content.append(title, meta)
+    item.append(content)
     return item
   }))
   element('recent-empty').hidden = publications.length > 0
@@ -165,11 +207,36 @@ function renderActivity(activity: ActivityEntry[]): void {
 }
 
 function updateControlStates(state: string): void {
-  const running = !['idle', 'stopped', 'paused', 'daily_limit_reached', 'authentication_required', 'captcha_detected', 'circuit_open'].includes(state)
-  element<HTMLButtonElement>('start-button').disabled = running
+  const running = !['idle', 'stopped', 'paused', 'awaiting_approval', 'daily_limit_reached', 'authentication_required', 'captcha_detected', 'circuit_open'].includes(state)
+  element<HTMLButtonElement>('start-button').disabled = !['idle', 'stopped'].includes(state)
   element<HTMLButtonElement>('pause-button').disabled = !running
   element<HTMLButtonElement>('resume-button').disabled = !['paused', 'authentication_required', 'captcha_detected', 'circuit_open'].includes(state)
+  const approveButton = element<HTMLButtonElement>('approve-button')
+  approveButton.hidden = state !== 'awaiting_approval'
+  approveButton.disabled = state !== 'awaiting_approval'
   element<HTMLButtonElement>('stop-button').disabled = state === 'idle' || state === 'stopped'
+}
+
+async function approveCurrentPin(): Promise<void> {
+  if (!await savePinReview(false)) return
+  if (!window.confirm('Publish this reviewed Pin now? Confirm that the image, copy, affiliate disclosure, destination link, and board are correct.')) return
+  await runCommand({ type: 'APPROVE_CURRENT_PIN' }, 'Pin approved for publication')
+}
+
+async function savePinReview(showConfirmation: boolean): Promise<boolean> {
+  try {
+    await sendMessage({
+      type: 'UPDATE_PIN_DRAFT',
+      title: element<HTMLInputElement>('review-pin-title').value,
+      description: element<HTMLTextAreaElement>('review-description').value,
+      altText: element<HTMLTextAreaElement>('review-alt-text').value,
+    })
+    if (showConfirmation) showToast('Reviewed draft saved')
+    return true
+  } catch (error) {
+    showToast(messageFromError(error), true)
+    return false
+  }
 }
 
 async function loadSettings(): Promise<void> {
@@ -189,9 +256,16 @@ function renderSettings(): void {
   })
   const config = settings.providerConfigs[provider]
   element<HTMLInputElement>('api-key').value = config.apiKey
+  element<HTMLSelectElement>('pinterest-environment').value = settings.pinterestEnvironment
+  element<HTMLInputElement>('oauth-worker-url').value = settings.pinterestOAuthWorkerUrl
+  element<HTMLInputElement>('pinterest-token').value = settings.pinterestAccessToken
+  element<HTMLInputElement>('pinterest-board-id').value = settings.pinterestBoardId
   element<HTMLInputElement>('board-name').value = settings.boardName
+  element<HTMLTextAreaElement>('board-description').value = settings.boardDescription
   element<HTMLInputElement>('discovery-pages').value = String(settings.discoveryMaxPages)
   element<HTMLInputElement>('dry-run').checked = settings.developerDryRun
+  element('pinterest-connection-state').textContent = settings.pinterestAccessToken ? 'Connected / token available' : 'Not connected'
+  element<HTMLButtonElement>('disconnect-pinterest').disabled = !settings.pinterestAccessToken
   renderModelOptions(settings.modelCatalogs[provider], config.primaryModel, config.fallbackModel)
 }
 
@@ -208,6 +282,12 @@ function captureCurrentProviderFields(): void {
   config.apiKey = element<HTMLInputElement>('api-key').value.trim()
   config.primaryModel = element<HTMLSelectElement>('primary-model').value
   config.fallbackModel = element<HTMLSelectElement>('fallback-model').value
+  settings.pinterestEnvironment = element<HTMLSelectElement>('pinterest-environment').value === 'production' ? 'production' : 'sandbox'
+  settings.pinterestOAuthWorkerUrl = element<HTMLInputElement>('oauth-worker-url').value.trim().replace(/\/$/, '')
+  settings.pinterestAccessToken = element<HTMLInputElement>('pinterest-token').value.trim()
+  settings.pinterestBoardId = element<HTMLInputElement>('pinterest-board-id').value.trim()
+  settings.boardName = element<HTMLInputElement>('board-name').value.trim()
+  settings.boardDescription = element<HTMLTextAreaElement>('board-description').value.trim()
   settings.discoveryMaxPages = Number.parseInt(element<HTMLInputElement>('discovery-pages').value, 10) || 3
   settings.developerDryRun = element<HTMLInputElement>('dry-run').checked
 }
@@ -265,6 +345,57 @@ async function testProvider(): Promise<void> {
     showToast(messageFromError(error), true)
   } finally {
     setBusy('test-provider', false)
+  }
+}
+
+async function connectPinterest(): Promise<void> {
+  if (!settings) return
+  captureCurrentProviderFields()
+  await persistSettings()
+  setBusy('connect-pinterest', true)
+  try {
+    await sendMessage({ type: 'CONNECT_PINTEREST' })
+    await loadSettings()
+    showToast('Pinterest OAuth connected')
+  } catch (error) {
+    showToast(messageFromError(error), true)
+  } finally {
+    setBusy('connect-pinterest', false)
+  }
+}
+
+async function disconnectPinterest(): Promise<void> {
+  if (!window.confirm('Disconnect Pinterest and remove locally stored OAuth tokens?')) return
+  setBusy('disconnect-pinterest', true)
+  try {
+    await sendMessage({ type: 'DISCONNECT_PINTEREST' })
+    await loadSettings()
+    showToast('Pinterest disconnected')
+  } catch (error) {
+    showToast(messageFromError(error), true)
+  } finally {
+    setBusy('disconnect-pinterest', false)
+  }
+}
+
+async function createPinterestBoard(): Promise<void> {
+  if (!settings) return
+  captureCurrentProviderFields()
+  await persistSettings()
+  if (!window.confirm('Create this Board on the connected Pinterest account?')) return
+  setBusy('create-board', true)
+  try {
+    const result = await sendMessage<{ id: string; name: string }>({
+      type: 'CREATE_PINTEREST_BOARD',
+      name: element<HTMLInputElement>('board-name').value,
+      description: element<HTMLTextAreaElement>('board-description').value,
+    })
+    await loadSettings()
+    showToast(`Board created · ${result.id}`)
+  } catch (error) {
+    showToast(messageFromError(error), true)
+  } finally {
+    setBusy('create-board', false)
   }
 }
 

@@ -31,6 +31,14 @@ function enforceComplianceDefaults(settings: AutomationSettings): AutomationSett
   return {
     ...settings,
     discoveryMaxPages: clampInteger(settings.discoveryMaxPages, 1, 10, 3),
+    pinterestEnvironment: settings.pinterestEnvironment === 'production' ? 'production' : 'sandbox',
+    pinterestOAuthWorkerUrl: String(settings.pinterestOAuthWorkerUrl ?? '').trim().replace(/\/$/, ''),
+    pinterestAccessToken: String(settings.pinterestAccessToken ?? '').trim(),
+    pinterestRefreshToken: String(settings.pinterestRefreshToken ?? '').trim(),
+    pinterestTokenExpiresAt: typeof settings.pinterestTokenExpiresAt === 'number' && Number.isFinite(settings.pinterestTokenExpiresAt)
+      ? settings.pinterestTokenExpiresAt
+      : null,
+    pinterestBoardId: String(settings.pinterestBoardId ?? '').trim(),
     dailyLimit: 10,
     minimumWindowHours: 8,
     maximumWindowHours: 12,

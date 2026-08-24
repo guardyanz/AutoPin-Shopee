@@ -6,6 +6,7 @@ import { validateSettingsForStart, type AutomationSettings } from '../core/setti
 import { nextConsecutiveFailureCount } from '../core/state-machine'
 import type { JobState, ProductCandidate, ProviderId } from '../core/types'
 import { createProviderClient } from '../providers/clients'
+import { PinterestApiClient, PinterestApiError } from '../providers/pinterest-api'
 import { createAutomationRepository } from '../storage/repository'
 import {
   appendActivity,
@@ -20,11 +21,7 @@ import { loadSettings, saveSettings } from '../storage/settings-store'
 import type { JobSnapshot, PublicationRecord } from '../storage/types'
 
 const AFFILIATE_URL = 'https://affiliate.shopee.co.id/offer/product_offer'
-const PINTEREST_HOME_URL = 'https://www.pinterest.com/'
-const PINTEREST_RESEARCH_URL = 'https://www.pinterest.com/search/pins/?q=aksesori%20gadget'
-const PINTEREST_CREATE_URL = 'https://www.pinterest.com/pin-creation-tool/'
 const RUN_ALARM = 'affiliate-pin-run'
-const RESEARCH_MAX_AGE = 30 * 86_400_000
 
 const repository = createAutomationRepository()
 let advancePromise: Promise<void> | null = null
@@ -64,10 +61,27 @@ async function initializeDefaults(): Promise<void> {
 async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
   switch (message.type) {
     case 'GET_DASHBOARD':
-      return {
-        status: await getRuntimeStatus(),
-        activity: await getActivityLog(),
-        publications: await repository.listRecentPublications(20),
+      {
+        const status = await getRuntimeStatus()
+        const payload = status.state === 'awaiting_approval' ? await getRuntimePayload() : {}
+        const settings = await loadSettings()
+        return {
+          status,
+          activity: await getActivityLog(),
+          publications: await repository.listRecentPublications(20),
+          review: status.state === 'awaiting_approval' && payload.activeProduct?.affiliateUrl && payload.generatedContent && payload.posterDataUrl
+            ? {
+                productTitle: payload.activeProduct.title,
+                posterDataUrl: payload.posterDataUrl,
+                title: payload.generatedContent.pinTitle,
+                description: payload.generatedContent.pinDescription,
+                altText: payload.generatedContent.altText,
+                destinationUrl: payload.activeProduct.affiliateUrl,
+                boardId: settings.pinterestBoardId,
+                boardLabel: settings.boardName,
+              }
+            : null,
+        }
       }
     case 'GET_SETTINGS':
       return loadSettings()
@@ -77,12 +91,22 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
       return fetchModels(message.provider)
     case 'TEST_PROVIDER':
       return testProvider(message.provider)
+    case 'CONNECT_PINTEREST':
+      return connectPinterest()
+    case 'DISCONNECT_PINTEREST':
+      return disconnectPinterest()
+    case 'CREATE_PINTEREST_BOARD':
+      return createPinterestBoard(message.name, message.description)
     case 'START_AUTOMATION':
       return startAutomation()
     case 'PAUSE_AUTOMATION':
       return pauseAutomation()
     case 'RESUME_AUTOMATION':
       return resumeAutomation()
+    case 'APPROVE_CURRENT_PIN':
+      return approveCurrentPin()
+    case 'UPDATE_PIN_DRAFT':
+      return updatePinDraft(message)
     case 'STOP_AUTOMATION':
       return stopAutomation()
     default:
@@ -104,6 +128,63 @@ async function fetchModels(provider: ProviderId): Promise<{ models: unknown[] }>
 async function testProvider(provider: ProviderId): Promise<{ connected: true; modelCount: number }> {
   const { models } = await fetchModels(provider)
   return { connected: true, modelCount: models.length }
+}
+
+interface PinterestOAuthTokens {
+  access_token: string
+  refresh_token?: string
+  expires_in?: number
+}
+
+async function connectPinterest(): Promise<{ connected: true }> {
+  const settings = await loadSettings()
+  const workerUrl = validateOAuthWorkerUrl(settings.pinterestOAuthWorkerUrl)
+  const callbackUri = chrome.identity.getRedirectURL('pinterest')
+  const start = await oauthWorkerRequest<{ authorization_url: string }>(workerUrl, '/v1/oauth/pinterest/start', {
+    callback_uri: callbackUri,
+    environment: settings.pinterestEnvironment,
+  })
+  const redirect = await chrome.identity.launchWebAuthFlow({ url: start.authorization_url, interactive: true })
+  if (!redirect) throw new AutomationError('oauth_cancelled', 'Pinterest OAuth did not return to AutoPin Shopee')
+  const result = new URL(redirect)
+  if (result.searchParams.has('error')) throw new AutomationError('oauth_denied', 'Pinterest access was denied')
+  const ticket = result.searchParams.get('ticket') ?? ''
+  if (!ticket) throw new AutomationError('oauth_ticket_missing', 'OAuth callback returned no one-time ticket')
+  const tokens = await oauthWorkerRequest<PinterestOAuthTokens>(workerUrl, '/v1/oauth/pinterest/redeem', { ticket })
+  if (!tokens.access_token) throw new AutomationError('oauth_token_missing', 'OAuth service returned no access token')
+  settings.pinterestAccessToken = tokens.access_token
+  settings.pinterestRefreshToken = tokens.refresh_token ?? ''
+  settings.pinterestTokenExpiresAt = Date.now() + Math.max(60, tokens.expires_in ?? 3_600) * 1_000
+  await saveSettings(settings)
+  await log('success', 'idle', 'Pinterest account connected through OAuth Authorization Code flow')
+  return { connected: true }
+}
+
+async function disconnectPinterest(): Promise<{ disconnected: true }> {
+  const settings = await loadSettings()
+  settings.pinterestAccessToken = ''
+  settings.pinterestRefreshToken = ''
+  settings.pinterestTokenExpiresAt = null
+  await saveSettings(settings)
+  await log('info', 'idle', 'Pinterest OAuth tokens removed from local extension storage')
+  return { disconnected: true }
+}
+
+async function createPinterestBoard(nameValue: string, descriptionValue: string): Promise<{ id: string; name: string }> {
+  const name = nameValue.trim()
+  const description = descriptionValue.trim()
+  if (name.length < 3 || name.length > 180) throw new AutomationError('board_name_invalid', 'Board name must contain 3–180 characters')
+  if (description.length > 500) throw new AutomationError('board_description_invalid', 'Board description must contain at most 500 characters')
+  const settings = await loadSettings()
+  const pinterest = await createPinterestClient(settings)
+  const board = await pinterest.createBoard(name, description)
+  if (!/^\d+$/.test(board.id)) throw new AutomationError('pinterest_board_id_missing', 'Pinterest API returned no valid Board ID')
+  settings.pinterestBoardId = board.id
+  settings.boardName = board.name || name
+  settings.boardDescription = description
+  await saveSettings(settings)
+  await log('success', 'idle', 'Created an owner-requested Pinterest Board')
+  return { id: board.id, name: settings.boardName }
 }
 
 async function startAutomation(): Promise<{ started: true }> {
@@ -179,6 +260,49 @@ async function stopAutomation(): Promise<{ stopped: true }> {
   await updateStatus('stopped', 'Stopped by user', job?.completedToday ?? 0)
   await log('warning', 'stopped', 'Automation stopped by user')
   return { stopped: true }
+}
+
+async function approveCurrentPin(): Promise<{ approved: true }> {
+  const job = await requireJob()
+  if (job.state !== 'awaiting_approval') {
+    throw new AutomationError('pin_not_awaiting_approval', 'No reviewed Pin is waiting for approval')
+  }
+  const settings = await loadSettings()
+  if (settings.developerDryRun) {
+    throw new AutomationError('dry_run_enabled', 'Turn off Developer dry run before approving a live publication')
+  }
+  const payload = await getRuntimePayload()
+  if (!payload.activeProduct || !payload.generatedContent || !payload.posterDataUrl) {
+    throw new AutomationError('runtime_payload_missing', 'The reviewed Pin payload is incomplete')
+  }
+  job.state = 'publish_pinterest'
+  job.updatedAt = Date.now()
+  await repository.saveJob(job)
+  await log('info', 'publish_pinterest', `User explicitly approved ${payload.activeProduct.title}`)
+  void runAdvance()
+  return { approved: true }
+}
+
+async function updatePinDraft(message: Extract<ExtensionMessage, { type: 'UPDATE_PIN_DRAFT' }>): Promise<{ updated: true }> {
+  const job = await requireJob()
+  if (job.state !== 'awaiting_approval') throw new AutomationError('pin_not_awaiting_approval', 'No Pin draft is waiting for review')
+  const payload = await getRuntimePayload()
+  if (!payload.generatedContent) throw new AutomationError('runtime_payload_missing', 'Pin draft content is missing')
+  const title = message.title.trim()
+  const description = message.description.trim()
+  const altText = message.altText.trim()
+  if (!title || title.length > 100) throw new AutomationError('pin_title_invalid', 'Pin title must contain 1–100 characters')
+  if (description.length > 800) throw new AutomationError('pin_description_invalid', 'Pin description must contain at most 800 characters')
+  if (!altText || altText.length > 500) throw new AutomationError('pin_alt_text_invalid', 'Alt text must contain 1–500 characters')
+  if ((description.match(/#affiliate/gi) ?? []).length !== 1) {
+    throw new AutomationError('affiliate_disclosure_invalid', 'Description must contain #affiliate exactly once')
+  }
+  await setRuntimePayload({
+    ...payload,
+    generatedContent: { ...payload.generatedContent, pinTitle: title, pinDescription: description, altText },
+  })
+  await log('info', 'awaiting_approval', 'User reviewed and updated the current Pin draft')
+  return { updated: true }
 }
 
 async function resumeFromCheckpoint(): Promise<void> {
@@ -258,37 +382,25 @@ async function advanceWorkflow(): Promise<void> {
 }
 
 async function runPreflight(job: JobSnapshot): Promise<void> {
-  await updateStatus('preflight', 'Checking Shopee, Pinterest, and provider configuration', job.completedToday)
+  await updateStatus('preflight', 'Checking Shopee, Pinterest API, and provider configuration', job.completedToday)
   const settings = await loadSettings()
   const errors = validateSettingsForStart(settings)
-  if (errors.length > 0) throw new AutomationError(errors[0], 'Provider settings are incomplete')
+  if (errors.length > 0) throw new AutomationError(errors[0], 'AI and Pinterest API settings are incomplete')
 
   const affiliateTab = await ensureTab('affiliate.shopee.co.id', AFFILIATE_URL)
-  const pinterestTab = await ensureTab('pinterest.com', PINTEREST_HOME_URL)
   await withSingleRetry(() => sendToTab(affiliateTab, { type: 'SHOPEE_PREFLIGHT' }))
-  await withSingleRetry(() => sendToTab(pinterestTab, { type: 'PINTEREST_PREFLIGHT' }))
+  const pinterest = await createPinterestClient(settings)
+  const boards = await pinterest.listBoards()
+  if (!boards.some((board) => board.id === settings.pinterestBoardId)) {
+    throw new AutomationError('pinterest_board_not_found', 'The selected Board ID is not owned by the authenticated Pinterest account')
+  }
   await transition(job, 'research_due_check', 'Preflight passed')
 }
 
 async function runResearch(job: JobSnapshot): Promise<void> {
-  const settings = await loadSettings()
-  const researchDue = !settings.researchUpdatedAt || Date.now() - settings.researchUpdatedAt >= RESEARCH_MAX_AGE || !settings.boardName
-  if (researchDue) {
-    await updateStatus('research_due_check', 'Researching Indonesian Pinterest search signals', job.completedToday)
-    const tabId = await ensureTab('pinterest.com', PINTEREST_RESEARCH_URL)
-    await navigateAndWait(tabId, PINTEREST_RESEARCH_URL)
-    const research = await withSingleRetry(() => sendToTab<{ signals: string[] }>(tabId, { type: 'PINTEREST_COLLECT_RESEARCH' }))
-    const prompt = buildBoardResearchPrompt(research.signals)
-    const generated = await generateWithFallback(settings, prompt)
-    const board = normalizeBoardResearch(generated.data)
-    settings.boardName = board.boardName
-    settings.boardDescription = board.boardDescription
-    settings.researchKeywords = board.keywords
-    settings.researchUpdatedAt = Date.now()
-    await saveSettings(settings)
-    await log('success', 'research_due_check', `Pinterest board research selected "${board.boardName}"`)
-  }
-  await transition(job, 'discover_products', researchDue ? 'Pinterest research complete' : 'Pinterest research is current')
+  await updateStatus('research_due_check', 'Using the Board explicitly selected by the account owner', job.completedToday)
+  await log('info', 'research_due_check', 'Owner selected the destination Pinterest Board')
+  await transition(job, 'discover_products', 'Owner-selected Pinterest Board is ready')
 }
 
 async function discoverProducts(job: JobSnapshot): Promise<void> {
@@ -436,27 +548,9 @@ async function fillPinterest(job: JobSnapshot): Promise<void> {
   if (!payload.activeProduct?.affiliateUrl || !payload.generatedContent || !payload.posterDataUrl) {
     throw new AutomationError('runtime_payload_missing', 'Pinterest publication payload is incomplete')
   }
-  await updateStatus('fill_pinterest', 'Filling the Pinterest Pin form', job.completedToday, payload.activeProduct.title)
-  const tabId = await ensureTab('pinterest.com', PINTEREST_CREATE_URL)
-  await navigateAndWait(tabId, PINTEREST_CREATE_URL)
-  await withSingleRetry(() => sendToTab(tabId, {
-    type: 'PINTEREST_ENSURE_BOARD',
-    boardName: settings.boardName,
-    boardDescription: settings.boardDescription,
-  }))
-  const result = await withSingleRetry(() => sendToTab<{ success: boolean; missingFields: string[] }>(tabId, {
-    type: 'PINTEREST_FILL',
-    posterDataUrl: payload.posterDataUrl!,
-    fields: {
-      title: payload.generatedContent!.pinTitle,
-      description: payload.generatedContent!.pinDescription,
-      altText: payload.generatedContent!.altText,
-      destinationUrl: payload.activeProduct!.affiliateUrl!,
-      boardName: settings.boardName,
-    },
-  }))
-  if (!result.success) throw new AutomationError('pinterest_fields_missing', `Missing Pinterest fields: ${result.missingFields.join(', ')}`)
-  await transition(job, 'publish_pinterest', 'Pinterest form validated')
+  if (!/^\d+$/.test(settings.pinterestBoardId)) throw new AutomationError('pinterest_board_id_required', 'Select a valid Pinterest Board ID')
+  await updateStatus('fill_pinterest', 'Draft ready; no Pinterest API write has occurred', job.completedToday, payload.activeProduct.title)
+  await transition(job, 'awaiting_approval', 'Review the image, copy, disclosure, link, Board, and schedule; then explicitly approve this Pin')
 }
 
 async function publishPinterest(job: JobSnapshot): Promise<void> {
@@ -466,30 +560,41 @@ async function publishPinterest(job: JobSnapshot): Promise<void> {
     job.state = 'paused'
     job.updatedAt = Date.now()
     await repository.saveJob(job)
-    await updateStatus('paused', 'Developer dry run: form filled, Publish not clicked', job.completedToday, payload.activeProduct?.title)
+    await updateStatus('paused', 'Developer dry run: draft approved locally, Pinterest API was not called', job.completedToday, payload.activeProduct?.title)
     return
   }
-  const tabId = await ensureTab('pinterest.com', PINTEREST_CREATE_URL)
-  await updateStatus('publish_pinterest', 'Publishing the Pin', job.completedToday, payload.activeProduct?.title)
-  const result = await sendToTab<{ confirmed: boolean; pinUrl: string }>(tabId, { type: 'PINTEREST_PUBLISH' })
-  await setRuntimePayload({ ...payload, pinUrl: result.pinUrl, publicationConfirmed: result.confirmed })
-  await transition(job, 'verify_publication', 'Pinterest acknowledged publication')
+  if (!payload.activeProduct?.affiliateUrl || !payload.generatedContent || !payload.posterDataUrl) {
+    throw new AutomationError('runtime_payload_missing', 'Approved Pinterest API payload is incomplete')
+  }
+  await updateStatus('publish_pinterest', 'Creating the explicitly approved Pin through Pinterest API v5', job.completedToday, payload.activeProduct.title)
+  const pinterest = await createPinterestClient(settings)
+  const result = await pinterest.createPin({
+    boardId: settings.pinterestBoardId,
+    title: payload.generatedContent.pinTitle,
+    description: payload.generatedContent.pinDescription,
+    altText: payload.generatedContent.altText,
+    link: payload.activeProduct.affiliateUrl,
+    posterDataUrl: payload.posterDataUrl,
+  })
+  if (!/^\d+$/.test(result.id)) throw new AutomationError('pinterest_pin_id_missing', 'Pinterest API returned no valid Pin ID')
+  const pinUrl = `https://www.pinterest.com/pin/${result.id}/`
+  await setRuntimePayload({ ...payload, pinterestPinId: result.id, pinUrl, publicationConfirmed: true })
+  await transition(job, 'verify_publication', 'Pinterest API acknowledged the Create Pin request')
 }
 
 async function verifyPublication(job: JobSnapshot): Promise<void> {
+  const settings = await loadSettings()
   const payload = await getRuntimePayload()
-  const tabId = await ensureTab('pinterest.com', PINTEREST_HOME_URL)
-  const result = await sendToTab<{ confirmed: boolean; pinUrl: string }>(tabId, { type: 'PINTEREST_VERIFY' })
-  const pinUrl = result.pinUrl || payload.pinUrl
-  if (!(result.confirmed || payload.publicationConfirmed) || !pinUrl) {
-    throw new AutomationError('publish_unconfirmed', 'Pinterest publication could not be verified; Publish will not be retried')
+  if (!payload.pinterestPinId || !payload.pinUrl || !payload.publicationConfirmed) {
+    throw new AutomationError('publish_unconfirmed', 'Pinterest publication could not be verified; Create Pin will not be retried')
   }
-  await setRuntimePayload({ ...payload, pinUrl })
-  await transition(job, 'commit_result', 'Pinterest publication verified')
+  const pinterest = await createPinterestClient(settings)
+  const result = await withSingleRetry(() => pinterest.getPin(payload.pinterestPinId!))
+  if (result.id !== payload.pinterestPinId) throw new AutomationError('publish_unconfirmed', 'Pinterest returned a different Pin during verification')
+  await transition(job, 'commit_result', 'Pinterest API publication verified')
 }
 
 async function commitResult(job: JobSnapshot): Promise<void> {
-  const settings = await loadSettings()
   const payload = await getRuntimePayload()
   if (!payload.activeProduct?.affiliateUrl || !payload.generatedContent || !payload.posterDataUrl || !payload.pinUrl || !payload.provider || !payload.model) {
     throw new AutomationError('runtime_payload_missing', 'Verified publication metadata is incomplete')
@@ -497,10 +602,9 @@ async function commitResult(job: JobSnapshot): Promise<void> {
   const record: PublicationRecord = {
     id: crypto.randomUUID(),
     productId: payload.activeProduct.id,
+    productTitle: payload.activeProduct.title,
     productUrl: payload.activeProduct.canonicalUrl,
     affiliateUrl: payload.activeProduct.affiliateUrl,
-    pinUrl: payload.pinUrl,
-    boardName: settings.boardName,
     provider: payload.provider,
     model: payload.model,
     publishedAt: Date.now(),
@@ -642,27 +746,52 @@ async function generateWithFallback(
   }
 }
 
-function buildBoardResearchPrompt(signals: string[]): string {
-  return `
-Riset board Pinterest untuk audiens Indonesia dengan niche aksesori gadget.
-Gunakan sinyal Pinterest berikut: ${signals.slice(0, 60).join(' | ') || 'aksesori gadget Indonesia'}.
-Pilih nama board yang natural, spesifik, dan tahan lama. Hindari clickbait.
-Kembalikan JSON valid saja dengan schema:
-{"boardName":"string","boardDescription":"string","keywords":["string"]}
-  `.trim()
+async function createPinterestClient(settings: AutomationSettings): Promise<PinterestApiClient> {
+  if (
+    settings.pinterestTokenExpiresAt
+    && settings.pinterestTokenExpiresAt <= Date.now() + 5 * 60_000
+    && settings.pinterestRefreshToken
+  ) {
+    const workerUrl = validateOAuthWorkerUrl(settings.pinterestOAuthWorkerUrl)
+    const tokens = await oauthWorkerRequest<PinterestOAuthTokens>(workerUrl, '/v1/oauth/pinterest/refresh', {
+      refresh_token: settings.pinterestRefreshToken,
+      environment: settings.pinterestEnvironment,
+    })
+    if (!tokens.access_token) throw new AutomationError('oauth_refresh_failed', 'OAuth refresh returned no access token')
+    settings.pinterestAccessToken = tokens.access_token
+    settings.pinterestRefreshToken = tokens.refresh_token ?? settings.pinterestRefreshToken
+    settings.pinterestTokenExpiresAt = Date.now() + Math.max(60, tokens.expires_in ?? 3_600) * 1_000
+    await saveSettings(settings)
+  }
+  return new PinterestApiClient(settings.pinterestAccessToken, settings.pinterestEnvironment)
 }
 
-function normalizeBoardResearch(value: unknown): { boardName: string; boardDescription: string; keywords: string[] } {
-  const record = typeof value === 'object' && value !== null ? value as Record<string, unknown> : {}
-  const boardName = typeof record.boardName === 'string' ? record.boardName.trim() : ''
-  const boardDescription = typeof record.boardDescription === 'string' ? record.boardDescription.trim() : ''
-  const keywords = Array.isArray(record.keywords)
-    ? record.keywords.filter((keyword): keyword is string => typeof keyword === 'string').map((keyword) => keyword.trim()).filter(Boolean)
-    : []
-  if (boardName.length < 4 || boardDescription.length < 10 || keywords.length < 2) {
-    throw new AutomationError('invalid_board_research', 'AI board research did not return valid structured data')
+async function oauthWorkerRequest<T>(workerUrl: string, path: string, body: Record<string, unknown>): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(`${workerUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch (error) {
+    throw new AutomationError('oauth_service_unreachable', error instanceof Error ? error.message : 'OAuth service is unreachable')
   }
-  return { boardName: boardName.slice(0, 80), boardDescription: boardDescription.slice(0, 500), keywords: keywords.slice(0, 20) }
+  if (!response.ok) throw new AutomationError('oauth_service_error', `OAuth service returned HTTP ${response.status}`)
+  return response.json() as Promise<T>
+}
+
+function validateOAuthWorkerUrl(value: string): string {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new AutomationError('oauth_worker_url_invalid', 'Enter a valid OAuth callback service URL')
+  }
+  if (url.protocol !== 'https:' || !url.hostname.endsWith('.workers.dev') || url.pathname !== '/' || url.username || url.password || url.search || url.hash) {
+    throw new AutomationError('oauth_worker_url_invalid', 'OAuth callback service must be a root HTTPS workers.dev URL')
+  }
+  return url.toString().replace(/\/$/, '')
 }
 
 async function ensureTab(host: string, defaultUrl: string): Promise<number> {
@@ -757,16 +886,17 @@ async function notifySafetyStop(message: string): Promise<void> {
 
 function normalizeError(error: unknown): { code: string; message: string } {
   if (error instanceof AutomationError) return { code: error.code, message: error.message }
+  if (error instanceof PinterestApiError) return { code: error.code, message: error.message }
   if (error instanceof Error) return { code: 'automation_error', message: error.message }
   return { code: 'automation_error', message: 'Unknown automation error' }
 }
 
 function isAdapterMessage(message: ExtensionMessage): boolean {
-  return message.type.startsWith('SHOPEE_') || message.type.startsWith('PINTEREST_') || message.type === 'RENDER_POSTER'
+  return message.type.startsWith('SHOPEE_') || message.type === 'RENDER_POSTER'
 }
 
 function isTerminalOrPaused(state: JobState): boolean {
-  return ['paused', 'daily_limit_reached', 'authentication_required', 'captcha_detected', 'circuit_open', 'stopped'].includes(state)
+  return ['awaiting_approval', 'paused', 'daily_limit_reached', 'authentication_required', 'captcha_detected', 'circuit_open', 'stopped'].includes(state)
 }
 
 function randomInteger(minimum: number, maximum: number): number {
