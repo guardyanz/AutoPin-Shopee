@@ -36,6 +36,7 @@ describe('automation repository', () => {
     const publishedAt = new Date('2026-07-01T08:00:00+07:00').getTime()
     const publication: PublicationRecord = {
       id: 'pin-1',
+      source: 'shopee',
       productId: 'sku-1',
       productTitle: 'Produk 1',
       productUrl: 'https://shopee.co.id/product/1',
@@ -57,6 +58,7 @@ describe('automation repository', () => {
     const repository = createAutomationRepository(databaseName)
     await repository.recordPublication({
       id: 'pin-1',
+      source: 'shopee',
       productId: 'sku-1',
       productTitle: 'Produk 1',
       productUrl: 'https://shopee.co.id/product/1',
@@ -69,6 +71,7 @@ describe('automation repository', () => {
     })
     await repository.recordPublication({
       id: 'pin-2',
+      source: 'shopee',
       productId: 'sku-2',
       productTitle: 'Produk 2',
       productUrl: 'https://shopee.co.id/product/2',
@@ -86,6 +89,7 @@ describe('automation repository', () => {
   it('persists discovered products for service-worker restart recovery', async () => {
     const repository = createAutomationRepository(databaseName)
     const product: ProductCandidate = {
+      source: 'shopee',
       id: 'sku-1',
       title: 'Kabel Fast Charging',
       canonicalUrl: 'https://shopee.co.id/product/1',
@@ -98,5 +102,8 @@ describe('automation repository', () => {
 
     await repository.saveProducts([product])
     expect(await repository.getProduct('sku-1')).toEqual(product)
+
+    await repository.deleteProduct('sku-1')
+    expect(await repository.getProduct('sku-1')).toBeUndefined()
   })
 })

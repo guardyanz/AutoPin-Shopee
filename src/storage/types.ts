@@ -1,4 +1,4 @@
-import type { JobState, ProviderId } from '../core/types'
+import type { JobState, ProductSource, ProviderId } from '../core/types'
 
 export interface JobSnapshot {
   id: 'active'
@@ -14,6 +14,7 @@ export interface JobSnapshot {
 
 export interface PublicationRecord {
   id: string
+  source: ProductSource
   productId: string
   productTitle: string
   productUrl: string

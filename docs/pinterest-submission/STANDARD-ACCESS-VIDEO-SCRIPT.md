@@ -7,7 +7,7 @@ Target duration: **3–5 minutes**. Record one continuous take at readable resol
 ## Pre-recording setup
 
 - Use the Trial/Sandbox environment first, then the environment requested by the upgrade form.
-- Have one authorised Shopee Affiliate product ready.
+- Have one authorised Shopee Affiliate product or Amazon ASIN ready. For Amazon, have the private Creators API backend configured and leave the optional image empty to demonstrate automatic original-poster generation.
 - Have one test Board ready, or demonstrate owner-requested Board creation.
 - Enable the browser network panel only if it can be shown without credentials.
 - Keep **Developer dry run** on until the final approved action.
@@ -17,7 +17,7 @@ Target duration: **3–5 minutes**. Record one continuous take at readable resol
 
 ### 0:00–0:30 — Identity and purpose
 
-> This is Wardiyan AutoPin Shopee, a creator productivity tool for a single account owner. It prepares original product creative from a Shopee Affiliate product selected by the owner. Every Pin is reviewed and explicitly approved before the app calls Pinterest API v5. The app does not collect Pinterest passwords or cookies and does not scrape Pinterest.
+> This is Wardiyan AutoPin Shopee, a creator productivity tool for a single account owner. It prepares original product creative from a Shopee Affiliate or Amazon Associates product selected by the owner. Every Pin is reviewed and explicitly approved before the app calls Pinterest API v5. The app does not collect Pinterest passwords or cookies and does not scrape Pinterest.
 
 Show the public landing page and open the Privacy Policy link.
 
@@ -35,8 +35,8 @@ Say:
 
 ### 1:20–2:20 — Create and review a draft
 
-1. Select one Shopee Affiliate product.
-2. Generate the affiliate link and original 1000 by 1500 creative.
+1. Select one Shopee Affiliate product or enter one Amazon ASIN. For Amazon, show the successful Creators API lookup.
+2. Generate the affiliate link and original 1000 by 1500 creative. If demonstrating Amazon, show that no catalog image or manual upload is required.
 3. Show title, description, `#affiliate`, alt text, destination link, Board, and schedule.
 4. Change one field to demonstrate owner control.
 5. Show that Publish is unavailable until the review confirmation is checked.

@@ -2,24 +2,27 @@ import type { ProductCandidate } from './types'
 
 export function buildPinGenerationPrompt(product: Pick<
   ProductCandidate,
-  'title' | 'description' | 'rating' | 'sold' | 'commissionPercent' | 'price'
+  'source' | 'title' | 'description' | 'rating' | 'sold' | 'commissionPercent' | 'price'
 >): string {
+  const sourceFacts = product.source === 'amazon'
+    ? `- Sumber: Amazon Associates\n- Nama produk: ${product.title}\n- Deskripsi: ${product.description ?? 'Tidak tersedia'}\n- Visual: poster tipografis orisinal; foto produk hanya digunakan bila pengguna menyediakan aset miliknya sendiri`
+    : `- Sumber: Shopee Affiliate\n- Nama: ${product.title}\n- Deskripsi: ${product.description ?? 'Tidak tersedia'}\n- Rating: ${product.rating}\n- Terjual: ${product.sold}\n- Komisi affiliate: ${product.commissionPercent}%`
+  const disclosureRules = product.source === 'amazon'
+    ? '- Deskripsi harus mengandung #affiliate tepat satu kali, #ad tepat satu kali, dan kalimat "As an Amazon Associate I earn from qualifying purchases." tepat satu kali.'
+    : '- Deskripsi harus mengandung #affiliate tepat satu kali.'
   return `
-Buat konten Pinterest berbahasa Indonesia untuk produk aksesori gadget berikut.
+Buat konten Pinterest berbahasa Indonesia untuk produk affiliate berikut.
 
 FAKTA SUMBER
-- Nama: ${product.title}
-- Deskripsi: ${product.description ?? 'Tidak tersedia'}
-- Rating: ${product.rating}
-- Terjual: ${product.sold}
-- Komisi affiliate: ${product.commissionPercent}%
+${sourceFacts}
 
 ATURAN
 - Gunakan gaya informatif dan soft-selling.
 - Jangan menyebut harga, diskon, voucher, stok terbatas, atau urgensi palsu.
 - Jangan membuat klaim yang tidak terdapat dalam fakta sumber.
-- Deskripsi harus mengandung #affiliate tepat satu kali.
+${disclosureRules}
 - Tulis alt text yang faktual dan ringkas.
+- Untuk sumber Amazon, jangan menyatakan bahwa poster menampilkan foto produk kecuali fakta sumber menyebut adanya aset milik pengguna.
 - Headline poster tidak boleh menyebut harga.
 - Kembalikan JSON valid saja, tanpa markdown.
 

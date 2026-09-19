@@ -5,8 +5,8 @@ This document is suitable as reviewer support material and as the implementation
 ## Data flow
 
 ```text
-Owner selects Shopee Affiliate product
-  → extension extracts authorised product metadata locally
+Owner selects Shopee Affiliate product or Amazon ASIN
+  → Shopee metadata is extracted locally, or private backend requests Amazon title + Special Link
   → optional AI provider receives selected product text to draft copy
   → extension renders original poster locally
   → owner reviews image, copy, link, Board, and schedule
@@ -21,6 +21,8 @@ Owner selects Shopee Affiliate product
 - OAuth 2.0 only; no Pinterest password or session-cookie collection.
 - Cryptographically random state value bound to each OAuth transaction.
 - Client secret and token exchange remain server-side.
+- Amazon Creators API Credential ID/Secret remain in the private backend; the extension uses a separate bearer service token.
+- Amazon catalog images are not requested. Without an optional owner-provided image, the extension renders an original graphic locally.
 - Least-privilege scope set: Boards and Pins read/write only.
 - No Pinterest scraping or DOM automation in the API-approved production path.
 - No automated engagement actions.
@@ -33,7 +35,7 @@ Owner selects Shopee Affiliate product
 
 ## Content responsibility
 
-The owner must have the rights and affiliate authorisation needed for every source product and image. The owner reviews every title, description, alt text, affiliate destination, disclosure, Board, and scheduled time. The app includes `#affiliate` once in the description and does not claim endorsement by Pinterest or Shopee.
+The owner must have the rights and affiliate authorisation needed for every source product and image. The owner reviews every title, description, alt text, affiliate destination, disclosure, Board, and scheduled time. The app includes `#affiliate` once in every description; Amazon drafts also require `#ad` and the Amazon Associate disclosure. It does not claim endorsement by Pinterest, Shopee, or Amazon.
 
 ## Incident response
 

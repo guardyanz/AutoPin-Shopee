@@ -4,6 +4,7 @@ import { evaluateEligibility, rankProducts } from '../src/core/eligibility'
 import type { ProductCandidate } from '../src/core/types'
 
 const baseProduct: ProductCandidate = {
+  source: 'shopee',
   id: 'sku-1',
   title: 'Fast charging cable',
   canonicalUrl: 'https://shopee.co.id/product/1',
@@ -30,6 +31,27 @@ describe('evaluateEligibility', () => {
     const result = evaluateEligibility({ ...baseProduct, ...override })
     expect(result.eligible).toBe(false)
     expect(result.reasons).toContain(reason)
+  })
+
+  it('accepts an Amazon Special Link without requiring a catalog image', () => {
+    const amazonProduct: ProductCandidate = {
+      source: 'amazon',
+      id: 'amazon:www.amazon.com:B0ABC12345',
+      sourceId: 'B0ABC12345',
+      marketplace: 'www.amazon.com',
+      title: 'Example product',
+      canonicalUrl: 'https://www.amazon.com/dp/B0ABC12345?tag=example-20',
+      affiliateUrl: 'https://www.amazon.com/dp/B0ABC12345?tag=example-20',
+      price: 0,
+      rating: 0,
+      sold: 0,
+      commissionPercent: 0,
+      imageUrl: '',
+    }
+
+    expect(evaluateEligibility(amazonProduct)).toEqual({ eligible: true, reasons: [] })
+    expect(evaluateEligibility({ ...amazonProduct, affiliateUrl: '' }).reasons).toContain('affiliate_link_missing')
+    expect(evaluateEligibility({ ...amazonProduct, imageUrl: 'https://images.amazon.com/catalog.jpg' }).reasons).toContain('owned_image_missing')
   })
 })
 

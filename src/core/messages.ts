@@ -7,6 +7,7 @@ export type ExtensionMessage =
   | { type: 'SAVE_SETTINGS'; settings: AutomationSettings }
   | { type: 'FETCH_MODELS'; provider: ProviderId }
   | { type: 'TEST_PROVIDER'; provider: ProviderId }
+  | { type: 'TEST_AMAZON_SERVICE' }
   | { type: 'CONNECT_PINTEREST' }
   | { type: 'DISCONNECT_PINTEREST' }
   | { type: 'CREATE_PINTEREST_BOARD'; name: string; description: string }

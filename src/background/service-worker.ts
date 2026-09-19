@@ -5,6 +5,7 @@ import { createDailySchedule, localDayKey } from '../core/scheduler'
 import { validateSettingsForStart, type AutomationSettings } from '../core/settings'
 import { nextConsecutiveFailureCount } from '../core/state-machine'
 import type { JobState, ProductCandidate, ProviderId } from '../core/types'
+import { AmazonServiceClient, AmazonServiceError } from '../providers/amazon-service'
 import { createProviderClient } from '../providers/clients'
 import { PinterestApiClient, PinterestApiError } from '../providers/pinterest-api'
 import { createAutomationRepository } from '../storage/repository'
@@ -91,6 +92,8 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
       return fetchModels(message.provider)
     case 'TEST_PROVIDER':
       return testProvider(message.provider)
+    case 'TEST_AMAZON_SERVICE':
+      return testAmazonService()
     case 'CONNECT_PINTEREST':
       return connectPinterest()
     case 'DISCONNECT_PINTEREST':
@@ -128,6 +131,20 @@ async function fetchModels(provider: ProviderId): Promise<{ models: unknown[] }>
 async function testProvider(provider: ProviderId): Promise<{ connected: true; modelCount: number }> {
   const { models } = await fetchModels(provider)
   return { connected: true, modelCount: models.length }
+}
+
+async function testAmazonService(): Promise<{ connected: true; productTitle: string }> {
+  const settings = await loadSettings()
+  const client = createAmazonClient(settings)
+  await client.health()
+  const product = await client.lookupProduct({
+    asin: settings.amazonAsin,
+    marketplace: settings.amazonMarketplace,
+    partnerTag: settings.amazonPartnerTag,
+    originalImageDataUrl: settings.amazonOriginalImageDataUrl || undefined,
+  })
+  await log('success', 'idle', 'Amazon Creators API lookup succeeded')
+  return { connected: true, productTitle: product.title }
 }
 
 interface PinterestOAuthTokens {
@@ -251,6 +268,11 @@ async function resumeAutomation(): Promise<{ resumed: true }> {
 async function stopAutomation(): Promise<{ stopped: true }> {
   const job = await repository.loadJob()
   if (job) {
+    if (job.activeProductId) {
+      await repository.deleteProduct(job.activeProductId)
+      job.queueProductIds = job.queueProductIds.filter((productId) => productId !== job.activeProductId)
+      delete job.activeProductId
+    }
     job.state = 'stopped'
     job.updatedAt = Date.now()
     await repository.saveJob(job)
@@ -296,6 +318,14 @@ async function updatePinDraft(message: Extract<ExtensionMessage, { type: 'UPDATE
   if (!altText || altText.length > 500) throw new AutomationError('pin_alt_text_invalid', 'Alt text must contain 1–500 characters')
   if ((description.match(/#affiliate/gi) ?? []).length !== 1) {
     throw new AutomationError('affiliate_disclosure_invalid', 'Description must contain #affiliate exactly once')
+  }
+  if (payload.activeProduct?.source === 'amazon') {
+    if ((description.match(/#ad\b/gi) ?? []).length !== 1) {
+      throw new AutomationError('amazon_ad_disclosure_invalid', 'Amazon Pin description must contain #ad exactly once')
+    }
+    if ((description.match(/As an Amazon Associate I earn from qualifying purchases\./gi) ?? []).length !== 1) {
+      throw new AutomationError('amazon_associate_statement_invalid', 'Amazon Pin description must contain the required Associate disclosure exactly once')
+    }
   }
   await setRuntimePayload({
     ...payload,
@@ -382,13 +412,17 @@ async function advanceWorkflow(): Promise<void> {
 }
 
 async function runPreflight(job: JobSnapshot): Promise<void> {
-  await updateStatus('preflight', 'Checking Shopee, Pinterest API, and provider configuration', job.completedToday)
+  await updateStatus('preflight', 'Checking product source, Pinterest API, and provider configuration', job.completedToday)
   const settings = await loadSettings()
   const errors = validateSettingsForStart(settings)
   if (errors.length > 0) throw new AutomationError(errors[0], 'AI and Pinterest API settings are incomplete')
 
-  const affiliateTab = await ensureTab('affiliate.shopee.co.id', AFFILIATE_URL)
-  await withSingleRetry(() => sendToTab(affiliateTab, { type: 'SHOPEE_PREFLIGHT' }))
+  if (settings.productSource === 'shopee') {
+    const affiliateTab = await ensureTab('affiliate.shopee.co.id', AFFILIATE_URL)
+    await withSingleRetry(() => sendToTab(affiliateTab, { type: 'SHOPEE_PREFLIGHT' }))
+  } else {
+    await createAmazonClient(settings).health()
+  }
   const pinterest = await createPinterestClient(settings)
   const boards = await pinterest.listBoards()
   if (!boards.some((board) => board.id === settings.pinterestBoardId)) {
@@ -405,6 +439,19 @@ async function runResearch(job: JobSnapshot): Promise<void> {
 
 async function discoverProducts(job: JobSnapshot): Promise<void> {
   const settings = await loadSettings()
+  if (settings.productSource === 'amazon') {
+    await updateStatus('discover_products', `Resolving owner-selected Amazon ASIN ${settings.amazonAsin}`, job.completedToday)
+    const product = await createAmazonClient(settings).lookupProduct({
+      asin: settings.amazonAsin,
+      marketplace: settings.amazonMarketplace,
+      partnerTag: settings.amazonPartnerTag,
+      originalImageDataUrl: settings.amazonOriginalImageDataUrl || undefined,
+    })
+    await repository.saveProducts([product])
+    job.queueProductIds = [product.id]
+    await transition(job, 'select_candidate', 'Queued one owner-selected Amazon product')
+    return
+  }
   await updateStatus('discover_products', `Scanning up to ${settings.discoveryMaxPages} Shopee Affiliate pages`, job.completedToday)
   const tabId = await ensureTab('affiliate.shopee.co.id', AFFILIATE_URL)
   await navigateAndWait(tabId, AFFILIATE_URL)
@@ -430,7 +477,9 @@ async function selectCandidate(job: JobSnapshot): Promise<void> {
 
   let selectedId: string | undefined
   for (const productId of job.queueProductIds) {
-    if (!await repository.wasPublishedWithin(productId, 30)) {
+    const product = await repository.getProduct(productId)
+    const duplicateKey = product ? await publicationProductKey(product) : productId
+    if (!await repository.wasPublishedWithin(duplicateKey, 30)) {
       selectedId = productId
       break
     }
@@ -449,6 +498,12 @@ async function selectCandidate(job: JobSnapshot): Promise<void> {
 
 async function extractProduct(job: JobSnapshot): Promise<void> {
   const candidate = await requireActiveProduct(job)
+  if (candidate.source === 'amazon') {
+    await updateStatus('extract_product', 'Using Creators API product data and original visual settings', job.completedToday, candidate.title)
+    await setRuntimePayload({ activeProduct: candidate })
+    await transition(job, 'generate_affiliate_link', 'Amazon product lookup complete')
+    return
+  }
   await updateStatus('extract_product', 'Reading the product details and selecting one image', job.completedToday, candidate.title)
   const tab = await chrome.tabs.create({ url: candidate.canonicalUrl, active: false })
   if (!tab.id) throw new AutomationError('tab_creation_failed', 'Could not open the Shopee product tab')
@@ -470,7 +525,7 @@ async function generateAffiliateLink(job: JobSnapshot): Promise<void> {
   const product = await requireActiveProduct(job)
   if (product.affiliateUrl) {
     await setRuntimePayload({ ...(await getRuntimePayload()), activeProduct: product })
-    await transition(job, 'generate_copy', 'Affiliate link collected during Shopee discovery')
+    await transition(job, 'generate_copy', product.source === 'amazon' ? 'Amazon Special Link received from Creators API' : 'Affiliate link collected during Shopee discovery')
     return
   }
   await updateStatus('generate_affiliate_link', 'Generating the Shopee affiliate link', job.completedToday, product.title)
@@ -491,11 +546,11 @@ async function generateCopy(job: JobSnapshot): Promise<void> {
   await updateStatus('generate_copy', 'Generating factual Pinterest copy', job.completedToday, product.title)
   const settings = await loadSettings()
   let generation = await generateWithFallback(settings, buildPinGenerationPrompt(product))
-  let validated = validateGeneratedContent(generation.data, [product.title, product.description ?? ''])
+  let validated = validateGeneratedContent(generation.data, [product.title, product.description ?? ''], product.source)
   if (!validated.success) {
     const repairPrompt = `${buildPinGenerationPrompt(product)}\n\nPerbaiki respons karena: ${validated.errors.join(', ')}`
     const repaired = await generateWithFallback(settings, repairPrompt)
-    validated = validateGeneratedContent(repaired.data, [product.title, product.description ?? ''])
+    validated = validateGeneratedContent(repaired.data, [product.title, product.description ?? ''], product.source)
     if (!validated.success) throw new AutomationError('invalid_generated_content', validated.errors.join(', '))
     generation = repaired
   }
@@ -601,10 +656,11 @@ async function commitResult(job: JobSnapshot): Promise<void> {
   }
   const record: PublicationRecord = {
     id: crypto.randomUUID(),
-    productId: payload.activeProduct.id,
-    productTitle: payload.activeProduct.title,
-    productUrl: payload.activeProduct.canonicalUrl,
-    affiliateUrl: payload.activeProduct.affiliateUrl,
+    source: payload.activeProduct.source,
+    productId: await publicationProductKey(payload.activeProduct),
+    productTitle: payload.activeProduct.source === 'amazon' ? 'Amazon product' : payload.activeProduct.title,
+    productUrl: payload.activeProduct.source === 'amazon' ? '' : payload.activeProduct.canonicalUrl,
+    affiliateUrl: payload.activeProduct.source === 'amazon' ? '' : payload.activeProduct.affiliateUrl,
     provider: payload.provider,
     model: payload.model,
     publishedAt: Date.now(),
@@ -616,12 +672,16 @@ async function commitResult(job: JobSnapshot): Promise<void> {
   job.nextSlotIndex = (job.nextSlotIndex ?? 0) + 1
   job.consecutiveFailures = 0
   await transition(job, 'cleanup', 'Publication committed')
-  await log('success', 'commit_result', `Published ${payload.activeProduct.title}`)
+  const logLabel = payload.activeProduct.source === 'amazon' ? 'selected Amazon product' : payload.activeProduct.title
+  await log('success', 'commit_result', `Published ${logLabel}`)
 }
 
 async function cleanupProduct(job: JobSnapshot): Promise<void> {
   const activeId = job.activeProductId
-  if (activeId) job.queueProductIds = job.queueProductIds.filter((productId) => productId !== activeId)
+  if (activeId) {
+    job.queueProductIds = job.queueProductIds.filter((productId) => productId !== activeId)
+    await repository.deleteProduct(activeId)
+  }
   delete job.activeProductId
   await clearRuntimePayload()
   const settings = await loadSettings()
@@ -667,6 +727,7 @@ async function handleWorkflowError(error: unknown): Promise<void> {
   }
 
   if (job.activeProductId) {
+    await repository.deleteProduct(job.activeProductId)
     job.queueProductIds = job.queueProductIds.filter((productId) => productId !== job.activeProductId)
     delete job.activeProductId
   }
@@ -764,6 +825,10 @@ async function createPinterestClient(settings: AutomationSettings): Promise<Pint
     await saveSettings(settings)
   }
   return new PinterestApiClient(settings.pinterestAccessToken, settings.pinterestEnvironment)
+}
+
+function createAmazonClient(settings: AutomationSettings): AmazonServiceClient {
+  return new AmazonServiceClient(settings.amazonServiceUrl, settings.amazonServiceToken)
 }
 
 async function oauthWorkerRequest<T>(workerUrl: string, path: string, body: Record<string, unknown>): Promise<T> {
@@ -866,13 +931,19 @@ async function ensureOffscreenDocument(): Promise<void> {
   await chrome.offscreen.createDocument({
     url: 'src/offscreen/index.html',
     reasons: [chrome.offscreen.Reason.BLOBS],
-    justification: 'Render a temporary Pinterest poster from an Affiliate-provided product image',
+    justification: 'Render a temporary original Pinterest poster from an affiliate product selected by the owner',
   })
 }
 
 async function fingerprint(value: string): Promise<string> {
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function publicationProductKey(product: ProductCandidate): Promise<string> {
+  return product.source === 'amazon'
+    ? `amazon:${await fingerprint(`${product.marketplace ?? ''}:${product.sourceId ?? product.id}`)}`
+    : product.id
 }
 
 async function notifySafetyStop(message: string): Promise<void> {
@@ -887,6 +958,7 @@ async function notifySafetyStop(message: string): Promise<void> {
 function normalizeError(error: unknown): { code: string; message: string } {
   if (error instanceof AutomationError) return { code: error.code, message: error.message }
   if (error instanceof PinterestApiError) return { code: error.code, message: error.message }
+  if (error instanceof AmazonServiceError) return { code: error.code, message: error.message }
   if (error instanceof Error) return { code: 'automation_error', message: error.message }
   return { code: 'automation_error', message: 'Unknown automation error' }
 }

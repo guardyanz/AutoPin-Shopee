@@ -1,7 +1,11 @@
 export type ProviderId = 'openrouter' | 'openai' | 'gemini'
+export type ProductSource = 'shopee' | 'amazon'
 
 export interface ProductCandidate {
+  source: ProductSource
   id: string
+  sourceId?: string
+  marketplace?: string
   title: string
   canonicalUrl: string
   price: number
@@ -27,6 +31,8 @@ export type EligibilityReason =
   | 'commission_below_minimum'
   | 'price_out_of_range'
   | 'affiliate_image_missing'
+  | 'affiliate_link_missing'
+  | 'owned_image_missing'
 
 export interface GeneratedPinContent {
   pinTitle: string

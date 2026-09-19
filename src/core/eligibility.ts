@@ -18,6 +18,12 @@ export function evaluateEligibility(
 ): { eligible: boolean; reasons: EligibilityReason[] } {
   const reasons: EligibilityReason[] = []
 
+  if (product.source === 'amazon') {
+    if (!product.affiliateUrl?.trim()) reasons.push('affiliate_link_missing')
+    if (product.imageUrl && !/^data:image\/(?:png|jpeg|webp);base64,/i.test(product.imageUrl)) reasons.push('owned_image_missing')
+    return { eligible: reasons.length === 0, reasons }
+  }
+
   if (product.rating < rules.minimumRating) reasons.push('rating_below_minimum')
   if (product.sold < rules.minimumSales) reasons.push('sales_below_minimum')
   if (product.commissionPercent < rules.minimumCommissionPercent) reasons.push('commission_below_minimum')

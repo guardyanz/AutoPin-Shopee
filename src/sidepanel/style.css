@@ -22,6 +22,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -175,6 +176,9 @@ dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 form { display: grid; gap: 15px; }
 .field-group { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: 7px; }
 .field-group label, .field-group legend { color: var(--ink); font-size: 12px; font-weight: 650; }
+.field-help { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.source-settings { display: grid; gap: 15px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #f8fafb; }
+.source-settings[hidden] { display: none; }
 input, select, textarea { width: 100%; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 6px; color: var(--ink); background: var(--surface); outline: none; }
 input, select { height: 38px; }
 textarea { padding-block: 9px; resize: vertical; }

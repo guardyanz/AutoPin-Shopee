@@ -1,101 +1,102 @@
 # AutoPin Shopee
 
-AutoPin Shopee adalah ekstensi Chrome Manifest V3 yang menghubungkan alur
-**Shopee Affiliate → Pinterest**. Produk diambil dari halaman penawaran Shopee,
-shortlink affiliate resmi dibuat dari sesi pengguna, materi Pin disiapkan, lalu
-setiap Pin ditinjau pengguna, lalu dipublikasikan melalui Pinterest API v5.
+AutoPin Shopee adalah ekstensi Chrome Manifest V3 untuk alur **Shopee Affiliate
+atau Amazon Associates -> Pinterest**. Aplikasi menyiapkan materi Pin, lalu pemilik
+akun meninjau dan menyetujui setiap Pin sebelum publikasi melalui Pinterest API v5.
 
-Proyek ini mengganti sumber Adobe Stock pada konsep AutoPin dengan adapter
-Shopee yang terinspirasi dan diadaptasi dari
-[ShopiThread](https://github.com/sodikinnaa/shopithread).
+Repository ini dibuat sebagai proyek baru. Adapter Shopee diadaptasi dari
+[ShopiThread](https://github.com/sodikinnaa/shopithread). Integrasi Amazon memakai
+[Amazon Creators API PHP SDK](https://github.com/timslabs/amazon-creatorsapi-php-sdk),
+bukan API Pinterest privat atau otomasi password/cookie.
 
-## Yang sudah diimplementasikan
+## Fitur
 
-- Memindai 1–10 halaman penawaran Shopee Affiliate secara berurutan.
-- Mengenali beberapa variasi DOM kartu produk dan menghapus suffix resize untuk
-  memakai gambar Shopee beresolusi lebih tinggi.
-- Menggabungkan produk duplikat berdasarkan ID Shopee.
-- Mengambil detail produk dan membuat shortlink resmi `s.shopee.co.id` atau
-  `shope.ee` melalui UI Shopee Affiliate yang sedang login.
-- Membuat judul, deskripsi, alt text, keyword, dan arahan layout melalui
-  OpenRouter, OpenAI, atau Gemini dengan validasi konten faktual.
-- Merender poster Pinterest 1000 × 1500 secara lokal tanpa mengubah bentuk
-  produk secara generatif.
-- Memvalidasi Board milik akun terautentikasi, meminta persetujuan eksplisit untuk
-  setiap draft, membuat Pin melalui `POST /v5/pins`, lalu memverifikasi hasil.
-- Menyimpan checkpoint di IndexedDB, melanjutkan pekerjaan setelah browser hidup
-  kembali, mencegah produk yang sama dipakai ulang selama 30 hari, dan membatasi
-  publikasi sampai 10 Pin per hari.
-- Menyediakan mode **Developer dry run** yang berhenti sebelum request Create Pin.
+- Memindai 1-10 halaman penawaran Shopee Affiliate, mengambil detail, gambar, dan
+  membuat shortlink resmi dari sesi pengguna yang sedang login.
+- Mengambil ASIN, judul, dan Special Link Amazon melalui backend Creators API.
+- Membuat poster Amazon otomatis sebagai desain tipografis/geometris orisinal.
+  Pengguna tidak perlu menyiapkan gambar sendiri.
+- Mendukung gambar opsional milik pengguna untuk Amazon setelah konfirmasi hak.
+  Gambar katalog Amazon tidak disalin ke Pinterest.
+- Membuat copy melalui OpenRouter, OpenAI, atau Gemini dengan pemeriksaan klaim,
+  disclosure `#affiliate`, dan disclosure Amazon tambahan.
+- Meminta persetujuan eksplisit untuk setiap draft sebelum `POST /v5/pins`.
+- Memverifikasi Pin melalui API, mencegah duplikasi 30 hari, membatasi 10 Pin per
+  hari, dan menyediakan Developer dry run.
 
-## Arsitektur singkat
+## Alur
 
 ```text
-Shopee Affiliate pages
-  → discovery + pagination
-  → product detail + HD image
-  → official affiliate shortlink
-  → validated AI copy + local poster
-  → per-Pin review + explicit approval
-  → Pinterest API v5 create + verification
-  → local publication history
+Shopee UI                         Amazon Creators API backend
+  -> metadata + shortlink          -> ASIN + title + Special Link
+              \                   /
+               -> validated AI copy
+               -> local original poster
+               -> review and explicit approval
+               -> Pinterest API v5 create + verify
 ```
 
-AutoPin Shopee tidak mengumpulkan password atau session cookie Pinterest, tidak
-melakukan scraping Pinterest, dan tidak mempunyai content script Pinterest.
+Backend Amazon hanya meminta resource judul. URL gambar katalog tidak diminta,
+disimpan, atau diteruskan. Credential ID/Secret Amazon tetap berada di server;
+ekstensi hanya memegang service token terpisah.
 
-## Build dan instalasi
+## Build ekstensi
 
-Prasyarat: Node.js 20+ dan Chrome 116+.
+Prasyarat: Node.js 22.12+ dan Chrome 116+.
 
 ```powershell
 npm ci
 npm run build
 ```
 
-Lalu buka `chrome://extensions`, aktifkan **Developer mode**, pilih
-**Load unpacked**, dan arahkan ke folder `AutoPin-Shopee/dist`.
+Buka `chrome://extensions`, aktifkan **Developer mode**, pilih **Load unpacked**,
+lalu arahkan ke `AutoPin-Shopee/dist`.
 
-Gunakan profil Chrome khusus otomasi, lalu login manual ke:
+## Menjalankan sumber Shopee
 
-1. `https://affiliate.shopee.co.id/offer/product_offer`
-2. Pinterest Business yang telah memperoleh Trial API access.
+1. Login manual ke `https://affiliate.shopee.co.id/offer/product_offer`.
+2. Di Settings, pilih **Shopee Affiliate**.
+3. Konfigurasikan provider AI, Pinterest OAuth/Board, dan jumlah halaman.
+4. Jalankan dengan Developer dry run aktif, tinjau draft, kemudian setujui Pin.
 
-## Konfigurasi dan penggunaan
+## Menjalankan sumber Amazon
 
-1. Buka side panel **AutoPin Shopee**.
-2. Di tab **Settings**, pilih provider AI dan isi API key.
-3. Klik **Fetch Models**, pilih model utama, dan simpan.
-4. Masukkan product-limited Pinterest Trial token, pilih Sandbox, dan isi Board ID.
-5. Tentukan jumlah halaman Shopee yang akan dipindai (1–10).
-6. Biarkan **Developer dry run** aktif untuk percobaan pertama.
-7. Klik **Start**, lalu periksa poster, copy, disclosure, Board, jadwal, dan link.
-8. Nonaktifkan dry run dan tekan **Approve Pin** hanya untuk draft yang sudah benar.
+Sumber Amazon memerlukan akses Amazon Creators API, Partner Tag yang sesuai
+marketplace, dan backend HTTPS dari folder [`amazon-service/`](amazon-service/README.md).
 
-Product-limited Trial token bersifat sementara. Untuk Standard access, gunakan
-OAuth Authorization Code melalui backend yang menjaga App Secret tetap server-side.
+1. Deploy backend dan simpan Credential ID, Credential Secret, serta Version hanya
+   sebagai environment secrets di server.
+2. Buat service token acak minimal 32 karakter.
+3. Di Settings, pilih **Amazon Associates**, isi URL backend, service token,
+   marketplace, Partner Tag, dan ASIN.
+4. Biarkan gambar opsional kosong agar AutoPin membuat poster orisinal otomatis,
+   atau unggah gambar yang hak penggunaannya Anda miliki.
+5. Klik **Test Amazon lookup**, lalu jalankan dry run dan tinjau hasil.
 
-## Pengajuan Pinterest API
+Contoh membuat service token di PowerShell:
 
-Paket pengajuan lengkap berada di
-[`docs/pinterest-submission/`](docs/pinterest-submission/README.md): jawaban form,
-scope, security/data flow, checklist Trial → Standard, ikon submission, dan skrip
-video demo. Website publik dan Privacy Policy berada di folder `docs/` dan akan
-dipublikasikan otomatis oleh GitHub Pages setelah repository di-push.
+```powershell
+$bytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+[Convert]::ToHexString($bytes).ToLowerInvariant()
+```
 
-OAuth callback service berada di [`oauth-worker/`](oauth-worker/README.md). Worker
-menjaga App Secret di server, memvalidasi state, menukar authorization code, dan
-memberikan token ke extension melalui one-time ticket singkat.
+## Pinterest API
+
+Materi pengajuan berada di
+[`docs/pinterest-submission/`](docs/pinterest-submission/README.md). OAuth callback
+service berada di [`oauth-worker/`](oauth-worker/README.md). App Secret Pinterest
+dan pertukaran authorization code tetap server-side.
+
+AutoPin tidak meminta password/cookie Pinterest, tidak melakukan scraping
+Pinterest, dan tidak memiliki content script Pinterest. Trial token bersifat
+sementara; gunakan OAuth Authorization Code untuk Standard access.
 
 ## Safety stop
 
-Workflow berhenti bila menemukan login kedaluwarsa, CAPTCHA, kuota harian, atau
-tiga kegagalan produk berturut-turut. Selesaikan tindakan manual yang diperlukan,
-periksa tab **Activity**, lalu pilih **Resume**.
-
-DOM Shopee dan Pinterest dapat berubah sewaktu-waktu. Jalankan dry run setelah
-setiap perubahan besar pada situs dan patuhi ketentuan Shopee Affiliate serta
-Pinterest yang berlaku pada akun Anda.
+Workflow berhenti saat login Shopee kedaluwarsa, CAPTCHA muncul, kuota harian
+tercapai, atau tiga produk gagal berturut-turut. Create Pin tidak diulang secara
+buta setelah respons ambigu.
 
 ## Pengujian
 
@@ -107,17 +108,18 @@ npm run test:e2e
 npm audit
 ```
 
-`test:e2e` memerlukan Chrome/Chromium dengan UI. Path executable dapat diberikan
-melalui environment variable `PLAYWRIGHT_CHROMIUM_EXECUTABLE`.
+Pengujian backend PHP dijalankan CI. Secara lokal:
+
+```powershell
+cd amazon-service
+composer install
+composer check
+composer test
+```
 
 ## Sumber dan lisensi
 
-AutoPin Shopee merupakan repository baru, bukan perubahan langsung pada kedua
-repository sumber. Atribusi lengkap tersedia di [NOTICE.md](NOTICE.md).
-
-- ShopiThread: MIT, copyright (c) 2026 Sodikin (sodikinnaa).
-- PinterestBulkPostBot: MIT, copyright (c) 2022 Enzo Day.
-- AutoPin Shopee: MIT, lihat [LICENSE](LICENSE).
-
-AutoPin Shopee adalah proyek independen dan tidak berafiliasi dengan Shopee atau
-Pinterest.
+Atribusi lengkap tersedia di [NOTICE.md](NOTICE.md). AutoPin Shopee berlisensi
+MIT. SDK Amazon adalah paket Apache-2.0 dari kode SDK resmi Amazon. AutoPin Shopee
+adalah proyek independen dan tidak berafiliasi dengan Amazon, Pinterest, atau
+Shopee.

@@ -28,9 +28,20 @@ export async function saveSettings(settings: AutomationSettings): Promise<Automa
 }
 
 function enforceComplianceDefaults(settings: AutomationSettings): AutomationSettings {
+  const marketplace = String(settings.amazonMarketplace ?? '').trim().toLowerCase()
+  const imageDataUrl = String(settings.amazonOriginalImageDataUrl ?? '')
   return {
     ...settings,
     discoveryMaxPages: clampInteger(settings.discoveryMaxPages, 1, 10, 3),
+    productSource: settings.productSource === 'amazon' ? 'amazon' : 'shopee',
+    amazonServiceUrl: String(settings.amazonServiceUrl ?? '').trim().replace(/\/$/, ''),
+    amazonServiceToken: String(settings.amazonServiceToken ?? '').trim(),
+    amazonMarketplace: marketplace || 'www.amazon.com',
+    amazonPartnerTag: String(settings.amazonPartnerTag ?? '').trim(),
+    amazonAsin: String(settings.amazonAsin ?? '').trim().toUpperCase(),
+    amazonOriginalImageDataUrl: /^data:image\/(?:png|jpeg|webp);base64,/i.test(imageDataUrl) ? imageDataUrl : '',
+    amazonOriginalImageName: String(settings.amazonOriginalImageName ?? '').trim().slice(0, 200),
+    amazonRightsConfirmed: settings.amazonRightsConfirmed === true,
     pinterestEnvironment: settings.pinterestEnvironment === 'production' ? 'production' : 'sandbox',
     pinterestOAuthWorkerUrl: String(settings.pinterestOAuthWorkerUrl ?? '').trim().replace(/\/$/, ''),
     pinterestAccessToken: String(settings.pinterestAccessToken ?? '').trim(),

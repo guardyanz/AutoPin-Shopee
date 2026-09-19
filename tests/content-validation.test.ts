@@ -34,4 +34,20 @@ describe('validateGeneratedContent', () => {
     )
     expect(result).toMatchObject({ success: false })
   })
+
+  it('requires both Amazon disclosures exactly once', () => {
+    const amazonContent = {
+      ...validContent,
+      pinDescription: 'Pilihan produk untuk inspirasi ruang kerja. #affiliate #ad As an Amazon Associate I earn from qualifying purchases.',
+    }
+
+    expect(validateGeneratedContent(amazonContent, [], 'amazon')).toMatchObject({ success: true })
+    expect(validateGeneratedContent(validContent, [], 'amazon')).toMatchObject({
+      success: false,
+      errors: expect.arrayContaining([
+        'amazon_ad_disclosure_must_appear_once',
+        'amazon_associate_statement_must_appear_once',
+      ]),
+    })
+  })
 })
