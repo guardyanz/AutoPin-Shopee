@@ -29,7 +29,6 @@ export interface AutomationRepository {
   listRecentPublications(limit?: number): Promise<PublicationRecord[]>
   saveProducts(products: ProductCandidate[]): Promise<void>
   getProduct(productId: string): Promise<ProductCandidate | undefined>
-  deleteProduct(productId: string): Promise<void>
 }
 
 export function createAutomationRepository(databaseName = 'autopin-shopee'): AutomationRepository {
@@ -95,12 +94,6 @@ export function createAutomationRepository(databaseName = 'autopin-shopee'): Aut
 
     getProduct(productId) {
       return withDatabase((database) => database.get('products', productId))
-    },
-
-    deleteProduct(productId) {
-      return withDatabase(async (database) => {
-        await database.delete('products', productId)
-      })
     },
   }
 }

@@ -18,18 +18,15 @@ async function renderPoster(message: Extract<ExtensionMessage, { type: 'RENDER_P
   const context = canvas?.getContext('2d', { alpha: false })
   if (!canvas || !context) throw new Error('Poster canvas is unavailable')
 
-  let image: ImageBitmap | null = null
-  if (message.product.imageUrl) {
-    const imageResponse = await fetch(message.product.imageUrl, { credentials: 'omit' })
-    if (!imageResponse.ok) throw new Error(`Product image download failed (${imageResponse.status})`)
-    image = await createImageBitmap(await imageResponse.blob())
-  }
+  const imageResponse = await fetch(message.product.imageUrl, { credentials: 'omit' })
+  if (!imageResponse.ok) throw new Error(`Product image download failed (${imageResponse.status})`)
+  const image = await createImageBitmap(await imageResponse.blob())
   const layout = computePosterLayout({
-    imageWidth: image?.width ?? 1,
-    imageHeight: image?.height ?? 1,
+    imageWidth: image.width,
+    imageHeight: image.height,
     headlineLength: message.headline.length,
   })
-  const palette = image ? samplePalette(image) : paletteFromText(message.product.title)
+  const palette = samplePalette(image)
 
   context.fillStyle = '#f5f7f8'
   context.fillRect(0, 0, canvas.width, canvas.height)
@@ -41,12 +38,11 @@ async function renderPoster(message: Extract<ExtensionMessage, { type: 'RENDER_P
   context.lineWidth = 2
   context.strokeRect(layout.image.x, layout.image.y, layout.image.width, layout.image.height)
 
-  if (image) drawContainedImage(context, image, layout.image)
-  else drawOriginalGraphic(context, layout.image, palette, message.product.title)
+  drawContainedImage(context, image, layout.image)
 
   context.fillStyle = palette.accent
   context.font = `600 ${layout.eyebrow.fontSize}px Inter, Arial, sans-serif`
-  context.fillText('PILIHAN PRODUK AFFILIATE', layout.eyebrow.x, layout.eyebrow.y + layout.eyebrow.fontSize)
+  context.fillText('AKSESORI GADGET PILIHAN', layout.eyebrow.x, layout.eyebrow.y + layout.eyebrow.fontSize)
 
   context.fillStyle = '#172126'
   context.font = `700 ${layout.headline.fontSize}px Inter, Arial, sans-serif`
@@ -56,83 +52,8 @@ async function renderPoster(message: Extract<ExtensionMessage, { type: 'RENDER_P
   context.font = `500 ${layout.footer.fontSize}px Inter, Arial, sans-serif`
   context.fillText('Detail produk tersedia melalui tautan Pin', layout.footer.x, layout.footer.y)
 
-  image?.close()
+  image.close()
   return canvas.toDataURL('image/jpeg', 0.9)
-}
-
-function paletteFromText(value: string): { accent: string; soft: string } {
-  let hash = 0
-  for (const character of value) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0
-  const hue = Math.abs(hash) % 360
-  return {
-    accent: `hsl(${hue} 58% 32%)`,
-    soft: `hsl(${hue} 45% 92%)`,
-  }
-}
-
-function drawOriginalGraphic(
-  context: CanvasRenderingContext2D,
-  box: { x: number; y: number; width: number; height: number },
-  palette: { accent: string; soft: string },
-  title: string,
-): void {
-  context.save()
-  context.fillStyle = palette.soft
-  context.fillRect(box.x, box.y, box.width, box.height)
-
-  context.globalAlpha = 0.16
-  context.fillStyle = palette.accent
-  context.beginPath()
-  context.arc(box.x + box.width * 0.24, box.y + box.height * 0.28, box.width * 0.2, 0, Math.PI * 2)
-  context.fill()
-  context.beginPath()
-  context.arc(box.x + box.width * 0.78, box.y + box.height * 0.72, box.width * 0.26, 0, Math.PI * 2)
-  context.fill()
-  context.globalAlpha = 1
-
-  const cardWidth = box.width * 0.58
-  const cardHeight = box.height * 0.46
-  const cardX = box.x + (box.width - cardWidth) / 2
-  const cardY = box.y + (box.height - cardHeight) / 2
-  context.fillStyle = '#ffffff'
-  context.shadowColor = 'rgba(23, 33, 38, 0.14)'
-  context.shadowBlur = 28
-  context.shadowOffsetY = 14
-  roundRect(context, cardX, cardY, cardWidth, cardHeight, 42)
-  context.fill()
-  context.shadowColor = 'transparent'
-
-  context.strokeStyle = palette.accent
-  context.lineWidth = 10
-  context.beginPath()
-  context.moveTo(cardX + cardWidth * 0.34, cardY + cardHeight * 0.32)
-  context.lineTo(cardX + cardWidth * 0.66, cardY + cardHeight * 0.32)
-  context.quadraticCurveTo(cardX + cardWidth * 0.78, cardY + cardHeight * 0.32, cardX + cardWidth * 0.78, cardY + cardHeight * 0.44)
-  context.lineTo(cardX + cardWidth * 0.78, cardY + cardHeight * 0.68)
-  context.quadraticCurveTo(cardX + cardWidth * 0.78, cardY + cardHeight * 0.76, cardX + cardWidth * 0.7, cardY + cardHeight * 0.76)
-  context.lineTo(cardX + cardWidth * 0.3, cardY + cardHeight * 0.76)
-  context.quadraticCurveTo(cardX + cardWidth * 0.22, cardY + cardHeight * 0.76, cardX + cardWidth * 0.22, cardY + cardHeight * 0.68)
-  context.lineTo(cardX + cardWidth * 0.44, cardY + cardHeight * 0.48)
-  context.stroke()
-
-  const initials = title.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0]?.toUpperCase()).join('') || 'AP'
-  context.fillStyle = palette.accent
-  context.font = '700 88px Inter, Arial, sans-serif'
-  context.textAlign = 'center'
-  context.textBaseline = 'middle'
-  context.fillText(initials, cardX + cardWidth / 2, cardY + cardHeight * 0.5)
-  context.restore()
-}
-
-function roundRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
-  const safeRadius = Math.min(radius, width / 2, height / 2)
-  context.beginPath()
-  context.moveTo(x + safeRadius, y)
-  context.arcTo(x + width, y, x + width, y + height, safeRadius)
-  context.arcTo(x + width, y + height, x, y + height, safeRadius)
-  context.arcTo(x, y + height, x, y, safeRadius)
-  context.arcTo(x, y, x + width, y, safeRadius)
-  context.closePath()
 }
 
 function samplePalette(image: ImageBitmap): { accent: string; soft: string } {

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import type { GeneratedPinContent, ProductSource } from './types'
+import type { GeneratedPinContent } from './types'
 
 const generatedPinContentSchema = z.object({
   pinTitle: z.string().trim().min(8).max(180),
@@ -21,7 +21,7 @@ export type ContentValidationResult =
   | { success: true; data: GeneratedPinContent }
   | { success: false; errors: string[] }
 
-export function validateGeneratedContent(input: unknown, _sourceFacts: string[], source: ProductSource = 'shopee'): ContentValidationResult {
+export function validateGeneratedContent(input: unknown, _sourceFacts: string[]): ContentValidationResult {
   const parsed = generatedPinContentSchema.safeParse(input)
   if (!parsed.success) {
     return { success: false, errors: parsed.error.issues.map((issue) => issue.message) }
@@ -32,12 +32,6 @@ export function validateGeneratedContent(input: unknown, _sourceFacts: string[],
   const disclosureCount = parsed.data.pinDescription.match(/#affiliate\b/gi)?.length ?? 0
 
   if (disclosureCount !== 1) errors.push('affiliate_disclosure_must_appear_once')
-  if (source === 'amazon') {
-    const adCount = parsed.data.pinDescription.match(/#ad\b/gi)?.length ?? 0
-    const associateStatementCount = parsed.data.pinDescription.match(/As an Amazon Associate I earn from qualifying purchases\./gi)?.length ?? 0
-    if (adCount !== 1) errors.push('amazon_ad_disclosure_must_appear_once')
-    if (associateStatementCount !== 1) errors.push('amazon_associate_statement_must_appear_once')
-  }
   if (FORBIDDEN_COMMERCIAL_PATTERN.test(content)) errors.push('price_or_promotion_claim_not_allowed')
   if (UNSUPPORTED_URGENCY_PATTERN.test(content)) errors.push('unsupported_urgency_claim')
 

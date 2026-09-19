@@ -58,7 +58,6 @@ export function extractShopeeCandidates(root: ParentNode): ProductCandidate[] {
 
     seen.add(id)
     return [{
-      source: 'shopee',
       id,
       title,
       canonicalUrl: link.href,

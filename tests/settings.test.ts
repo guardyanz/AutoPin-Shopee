@@ -10,7 +10,6 @@ describe('automation settings', () => {
     expect(DEFAULT_SETTINGS.disclosure).toBe('#affiliate')
     expect(DEFAULT_SETTINGS.discoveryMaxPages).toBe(3)
     expect(DEFAULT_SETTINGS.developerDryRun).toBe(true)
-    expect(DEFAULT_SETTINGS.productSource).toBe('shopee')
   })
 
   it('requires an API key and selected model before start', () => {
@@ -30,30 +29,5 @@ describe('automation settings', () => {
       pinterestAccessToken: 'pina_test',
       pinterestBoardId: '123456789',
     })).toEqual([])
-  })
-
-  it('validates the Amazon service configuration only for the Amazon source', () => {
-    const configured = {
-      ...DEFAULT_SETTINGS,
-      productSource: 'amazon' as const,
-      amazonServiceUrl: 'https://amazon-service.example.com/',
-      amazonServiceToken: 'a-secure-service-token-1234567890',
-      amazonMarketplace: 'www.amazon.com',
-      amazonPartnerTag: 'example-20',
-      amazonAsin: 'B0ABC12345',
-      providerConfigs: {
-        ...DEFAULT_SETTINGS.providerConfigs,
-        openrouter: { apiKey: 'secret', primaryModel: 'vendor/model', fallbackModel: '' },
-      },
-      pinterestAccessToken: 'pina_test',
-      pinterestBoardId: '123456789',
-    }
-
-    expect(validateSettingsForStart(configured)).toEqual([])
-    expect(validateSettingsForStart({
-      ...configured,
-      amazonOriginalImageDataUrl: 'data:image/png;base64,AA==',
-      amazonRightsConfirmed: false,
-    })).toContain('amazon_image_rights_required')
   })
 })

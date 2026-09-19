@@ -31,7 +31,6 @@ describe('Shopee DOM parsing', () => {
     `
 
     expect(extractShopeeCandidates(document)).toEqual([{
-      source: 'shopee',
       id: 'sku-123',
       title: 'Kabel Fast Charging 100W',
       canonicalUrl: 'https://shopee.co.id/Kabel-Fast-Charging-i.10.20',

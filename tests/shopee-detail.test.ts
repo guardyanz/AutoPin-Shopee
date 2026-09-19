@@ -9,7 +9,6 @@ import {
 import type { ProductCandidate } from '../src/core/types'
 
 const candidate: ProductCandidate = {
-  source: 'shopee',
   id: 'sku-123',
   title: 'Kabel Fast Charging',
   canonicalUrl: 'https://shopee.co.id/Kabel-i.10.20',

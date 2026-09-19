@@ -11,7 +11,7 @@
       <div class="brand-mark" aria-hidden="true"><i data-lucide="workflow"></i></div>
       <div class="brand-copy">
         <strong>AutoPin Shopee</strong>
-        <span id="connection-label">Shopee / Amazon Affiliate → Pinterest</span>
+        <span id="connection-label">Shopee Affiliate → Pinterest</span>
       </div>
       <button class="icon-button" id="refresh-dashboard" type="button" title="Refresh status" aria-label="Refresh status">
         <i data-lucide="refresh-cw"></i>
@@ -93,7 +93,7 @@
             <span id="updated-at">Not started</span>
           </div>
           <ol class="pipeline" id="pipeline-list">
-            <li data-stage-group="source"><span>1</span><div><strong>Product source</strong><small>Shopee or Amazon affiliate data</small></div></li>
+            <li data-stage-group="source"><span>1</span><div><strong>Shopee source</strong><small>Discovery, product data, affiliate link</small></div></li>
             <li data-stage-group="creative"><span>2</span><div><strong>Creative</strong><small>Copy validation and poster render</small></div></li>
             <li data-stage-group="publish"><span>3</span><div><strong>Pinterest API</strong><small>Review, explicit approval, verification</small></div></li>
           </ol>
@@ -164,66 +164,6 @@
           </div>
 
           <div class="field-group">
-            <label for="product-source">Affiliate product source</label>
-            <select id="product-source">
-              <option value="shopee">Shopee Affiliate</option>
-              <option value="amazon">Amazon Associates</option>
-            </select>
-          </div>
-
-          <section class="source-settings" id="amazon-settings" hidden>
-            <div class="field-group">
-              <label for="amazon-service-url">Amazon backend URL</label>
-              <input id="amazon-service-url" type="url" inputmode="url" placeholder="https://amazon-service.example.com" />
-            </div>
-
-            <div class="field-group">
-              <label for="amazon-service-token">Amazon backend service token</label>
-              <input id="amazon-service-token" type="password" autocomplete="off" spellcheck="false" />
-            </div>
-
-            <div class="field-group">
-              <label for="amazon-marketplace">Amazon marketplace</label>
-              <select id="amazon-marketplace">
-                <option value="www.amazon.com">United States — amazon.com</option>
-                <option value="www.amazon.sg">Singapore — amazon.sg</option>
-                <option value="www.amazon.com.au">Australia — amazon.com.au</option>
-                <option value="www.amazon.co.uk">United Kingdom — amazon.co.uk</option>
-                <option value="www.amazon.de">Germany — amazon.de</option>
-                <option value="www.amazon.co.jp">Japan — amazon.co.jp</option>
-                <option value="www.amazon.in">India — amazon.in</option>
-                <option value="www.amazon.ca">Canada — amazon.ca</option>
-              </select>
-            </div>
-
-            <div class="field-group">
-              <label for="amazon-partner-tag">Amazon Partner Tag</label>
-              <input id="amazon-partner-tag" type="text" autocomplete="off" spellcheck="false" placeholder="yourtag-20" />
-            </div>
-
-            <div class="field-group">
-              <label for="amazon-asin">Amazon ASIN</label>
-              <input id="amazon-asin" type="text" minlength="10" maxlength="10" autocomplete="off" spellcheck="false" placeholder="B09B2SBHQK" />
-              <small class="field-help">One product deliberately selected by the account owner.</small>
-            </div>
-
-            <div class="field-group">
-              <label for="amazon-original-image">Original image (optional)</label>
-              <input id="amazon-original-image" type="file" accept="image/png,image/jpeg,image/webp" />
-              <small class="field-help" id="amazon-image-state">Without an upload, AutoPin creates an original typographic poster automatically.</small>
-              <button class="text-button" id="clear-amazon-image" type="button">Remove optional image</button>
-            </div>
-
-            <label class="toggle-row" for="amazon-rights-confirmed">
-              <span><strong>I own this uploaded image</strong><small>Required only when an optional image is selected</small></span>
-              <input id="amazon-rights-confirmed" type="checkbox" />
-            </label>
-
-            <button class="button button-full" id="test-amazon" type="button"><i data-lucide="plug-zap"></i><span>Test Amazon product lookup</span></button>
-            <p class="review-note">Catalog images are not transferred to Pinterest. The Special Link returned by Amazon is preserved unchanged.</p>
-          </section>
-
-          <div class="field-group">
             <label for="pinterest-environment">Pinterest API environment</label>
             <select id="pinterest-environment">
               <option value="sandbox">Sandbox / Trial</option>
@@ -264,7 +204,7 @@
 
           <button class="button button-full" id="create-board" type="button"><i data-lucide="workflow"></i><span>Create this Board through API</span></button>
 
-          <div class="field-group" id="shopee-settings">
+          <div class="field-group">
             <label for="discovery-pages">Halaman Shopee yang dipindai</label>
             <input id="discovery-pages" type="number" min="1" max="10" step="1" />
           </div>
@@ -276,7 +216,7 @@
 
           <div class="compliance-row">
             <i data-lucide="shield-check"></i>
-            <span><strong>Per-Pin approval</strong><small>#affiliate · Amazon #ad · maximum 10 pins/day</small></span>
+            <span><strong>Per-Pin approval</strong><small>#affiliate · maximum 10 pins/day</small></span>
           </div>
 
           <button class="button button-primary button-full" type="submit"><i data-lucide="save"></i><span>Save Settings</span></button>

@@ -14,7 +14,7 @@
       <div class="eyebrow">Wardiyan</div>
       <h1>Privacy Policy</h1>
       <p class="meta"><strong>Effective date:</strong> 24 August 2026 · <strong>Last updated:</strong> 24 August 2026</p>
-      <p>This Privacy Policy explains how Wardiyan (“we”, “us”) handles information when the account owner uses AutoPin Shopee. The app is a creator productivity tool for preparing and publishing individually approved content to the owner's Pinterest account. Last updated: 20 September 2026.</p>
+      <p>This Privacy Policy explains how Wardiyan (“we”, “us”) handles information when the account owner uses AutoPin Shopee. The app is a creator productivity tool for preparing and publishing individually approved content to the owner's Pinterest account.</p>
 
       <h2>Information handled</h2>
       <div class="table-wrap"><table>
@@ -23,9 +23,6 @@
           <tr><td>Pinterest OAuth access and refresh tokens</td><td>Authenticate API calls authorised by the account owner.</td><td>Kept confidential and never committed to source control. During the production OAuth flow, token exchange occurs through the configured secure callback service.</td></tr>
           <tr><td>The owner-selected Board identifier and label</td><td>Remember the owner's destination instruction for approved publications.</td><td>Stored locally as user configuration until changed or deleted. Other Pinterest API responses are requested when needed and are not retained as a separate database.</td></tr>
           <tr><td>Selected Shopee product title, image, price, affiliate link, and creator draft</td><td>Prepare the Pin the owner requested.</td><td>Stored locally in the owner's Chrome profile until removed by the owner.</td></tr>
-          <tr><td>Amazon ASIN, marketplace, Partner Tag, product title, and Special Link</td><td>Look up the owner-selected Amazon Associates product and prepare its Pin.</td><td>ASIN, marketplace, and Partner Tag are stored locally as owner settings until changed or deleted. The private backend does not retain product responses, and temporary lookup results are removed locally after the workflow finishes.</td></tr>
-          <tr><td>Amazon Creators API credentials and short-lived OAuth token</td><td>Authenticate the private backend to Amazon Creators API.</td><td>Credentials remain in server environment secrets. The access token is held in a restricted server cache and is never sent to the extension.</td></tr>
-          <tr><td>Optional owner-provided Amazon image</td><td>Render a local poster when the owner chooses to use an image they have rights to.</td><td>Stored only in the owner's Chrome profile and never sent to Amazon or the AI provider. If omitted, the app generates an original typographic poster automatically.</td></tr>
           <tr><td>Local publication record: Shopee product ID/title, timestamp, and non-reversible content fingerprints</td><td>Prevent accidental duplicate publication and show the owner's local activity history.</td><td>Stored locally in the owner's Chrome profile. The record does not retain Pinterest Pin or Board API response data.</td></tr>
           <tr><td>AI provider configuration</td><td>Generate draft copy at the owner's request.</td><td>API keys are stored locally in the owner's Chrome profile and sent only to the selected provider.</td></tr>
         </tbody>
@@ -35,10 +32,10 @@
       <p>Pinterest data is used only to provide the requested service to the authenticated account owner: list the owner's boards, create a board when requested, create an individually approved Pin, and verify that Pin. We do not sell Pinterest data, share it with data brokers or advertising services, combine one user's Pinterest data with another user's data, scrape Pinterest, or use Pinterest data to train or improve artificial intelligence models.</p>
 
       <h2>AI-assisted drafting</h2>
-      <p>If the owner enables an AI provider, selected Shopee or Amazon product text may be sent to that provider to draft copy. Amazon credentials, the optional owner-provided image, and Pinterest API data are not included in prompts or model training datasets by AutoPin Shopee. The provider selected by the owner processes requests under its own terms and privacy policy.</p>
+      <p>If the owner enables an AI provider, selected Shopee product text may be sent to that provider to draft copy. Pinterest API data is not included in model training datasets by AutoPin Shopee. The provider selected by the owner processes requests under its own terms and privacy policy.</p>
 
       <h2>Sharing and processors</h2>
-      <p>Information is disclosed only as needed to provide the service: Pinterest for account authorisation and publication, Shopee for affiliate-link generation, Amazon Creators API for an owner-requested product lookup and Special Link, the AI provider selected by the owner for draft generation, and hosting providers used for the private backends and public documentation. We do not sell personal information.</p>
+      <p>Information is disclosed only as needed to provide the service: Pinterest for account authorisation and publication, Shopee for affiliate-link generation, the AI provider selected by the owner for draft generation, and the hosting provider used for the OAuth callback and public documentation. We do not sell personal information.</p>
 
       <h2>Retention and deletion</h2>
       <p>Local product drafts and publication records remain until the owner removes the extension data. Short-lived OAuth transaction metadata is retained only long enough to complete or reject the authorisation flow. The owner can disconnect the Pinterest account, revoke access in Pinterest settings, clear extension storage, or follow the instructions on the <a href="data-deletion.html">Data Deletion page</a>.</p>
