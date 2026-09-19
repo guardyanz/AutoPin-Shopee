@@ -46,7 +46,7 @@ melakukan scraping Pinterest, dan tidak mempunyai content script Pinterest.
 
 ## Build dan instalasi
 
-Prasyarat: Node.js 20+ dan Chrome 116+.
+Prasyarat: Node.js 22.12+ dan Chrome 116+.
 
 ```powershell
 npm ci
