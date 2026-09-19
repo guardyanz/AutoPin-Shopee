@@ -26,13 +26,13 @@ Do not request ads, analytics, audiences, catalogs, secret-board, or user-accoun
 
 ## OAuth configuration after Trial approval
 
-Register one exact HTTPS redirect URI backed by the OAuth service, for example:
+Register this exact HTTPS redirect URI backed by the deployed OAuth service:
 
 ```text
-https://autopin-shopee-oauth.<your-cloudflare-subdomain>.workers.dev/v1/oauth/pinterest/callback
+https://autopin-shopee-oauth.akurindowijayapwt.workers.dev/v1/oauth/pinterest/callback
 ```
 
-Replace the placeholder with the deployed Worker URL. The URI used in the authorisation request and token exchange must exactly match the registered URI and must not issue a second redirect before processing the Pinterest callback.
+The URI used in the authorisation request and token exchange must exactly match the registered URI and must not issue a second redirect before processing the Pinterest callback.
 
 OAuth authorisation request:
 

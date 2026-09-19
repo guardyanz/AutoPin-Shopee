@@ -57,7 +57,7 @@ export const DEFAULT_SETTINGS: AutomationSettings = {
   researchUpdatedAt: null,
   discoveryMaxPages: 3,
   pinterestEnvironment: 'sandbox',
-  pinterestOAuthWorkerUrl: '',
+  pinterestOAuthWorkerUrl: 'https://autopin-shopee-oauth.akurindowijayapwt.workers.dev',
   pinterestAccessToken: '',
   pinterestRefreshToken: '',
   pinterestTokenExpiresAt: null,

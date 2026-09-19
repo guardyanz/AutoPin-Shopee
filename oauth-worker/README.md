@@ -6,20 +6,26 @@ returns credentials to the Chrome extension through a short-lived one-time
 ticket. It requests the fixed least-privilege scope set documented in the API
 submission pack.
 
-## Setup after Trial approval
+## Trial deployment
+
+The OAuth service is deployed at:
+
+```text
+https://autopin-shopee-oauth.akurindowijayapwt.workers.dev
+```
+
+Register this exact Pinterest redirect URI (including the path, with no trailing slash):
+
+```text
+https://autopin-shopee-oauth.akurindowijayapwt.workers.dev/v1/oauth/pinterest/callback
+```
+
+The production and preview KV namespace IDs and the redirect URI are already
+configured in `wrangler.jsonc`. After receiving or rotating Pinterest app
+credentials, set them without writing either value to a file:
 
 ```powershell
 npm install
-npx wrangler kv namespace create OAUTH_TRANSACTIONS
-npx wrangler kv namespace create OAUTH_TRANSACTIONS --preview
-```
-
-Put the returned namespace IDs and final workers.dev redirect URI in
-`wrangler.jsonc`. Register that exact redirect URI in Pinterest My Apps.
-
-Set secrets without writing them to a file:
-
-```powershell
 npx wrangler secret put PINTEREST_CLIENT_ID
 npx wrangler secret put PINTEREST_CLIENT_SECRET
 npm run deploy
