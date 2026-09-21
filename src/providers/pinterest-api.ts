@@ -28,7 +28,8 @@ export class PinterestApiClient {
   constructor(
     private readonly accessToken: string,
     environment: PinterestApiEnvironment,
-    private readonly fetcher: typeof fetch = fetch,
+    // Native fetch requires its Window/WorkerGlobalScope receiver, not this client.
+    private readonly fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {
     if (!accessToken.trim()) throw new PinterestApiError('pinterest_token_required', 'Pinterest access token is required')
     this.baseUrl = environment === 'sandbox'

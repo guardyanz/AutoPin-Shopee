@@ -3,6 +3,20 @@ import { describe, expect, it, vi } from 'vitest'
 import { parseImageDataUrl, PinterestApiClient, PinterestApiError } from '../src/providers/pinterest-api'
 
 describe('Pinterest API client', () => {
+  it('loads boards using the default browser fetch with a valid global receiver', async () => {
+    // Browsers reject a native fetch whose receiver is a PinterestApiClient.
+    vi.stubGlobal('fetch', function (this: unknown) {
+      if (this != null && this !== globalThis) throw new TypeError('Illegal invocation')
+      return Promise.resolve(new Response(JSON.stringify({ items: [{ id: '123', name: 'SHOPEE' }] })))
+    })
+    try {
+      const client = new PinterestApiClient('pina_test', 'sandbox')
+      await expect(client.listBoards()).resolves.toEqual([{ id: '123', name: 'SHOPEE' }])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('uses the Sandbox host and paginates the authenticated owner boards', async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: '1', name: 'One' }], bookmark: 'next' }), { status: 200 }))
