@@ -19,6 +19,14 @@ describe('evaluateEligibility', () => {
     expect(evaluateEligibility(baseProduct)).toEqual({ eligible: true, reasons: [] })
   })
 
+  it('keeps unreported rating and sales unknown without dropping an otherwise usable offer', () => {
+    expect(evaluateEligibility({ ...baseProduct, rating: null, sold: null })).toEqual({ eligible: true, reasons: [] })
+    expect(evaluateEligibility({ ...baseProduct, rating: null, sold: 3_000, commissionPercent: 7.5 }).reasons)
+      .toContain('commission_below_minimum')
+    expect(evaluateEligibility({ ...baseProduct, rating: 0, sold: 0 }).reasons)
+      .toEqual(['rating_below_minimum', 'sales_below_minimum'])
+  })
+
   it.each([
     ['rating', { rating: 4.69 }, 'rating_below_minimum'],
     ['sales', { sold: 99 }, 'sales_below_minimum'],

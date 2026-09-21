@@ -78,6 +78,13 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
 Product-limited Trial token bersifat sementara. Untuk Standard access, gunakan
 OAuth Authorization Code melalui backend yang menjaga App Secret tetap server-side.
 
+Pemilihan produk menggunakan harga Rp25.000–Rp500.000 dan komisi minimal 10%.
+Jika tercantum pada kartu, rating minimal 4,7 dan penjualan minimal 100 juga
+diterapkan. Rating atau penjualan yang tidak ditampilkan Shopee disimpan sebagai
+data tidak tersedia, bukan diisi angka perkiraan. Produk tetap harus Anda tinjau
+sebelum publikasi. Tab **Activity** menampilkan jumlah produk terbaca, produk
+lolos filter, dan kegagalan mengambil link affiliate.
+
 ## Pengajuan Pinterest API
 
 Paket pengajuan lengkap berada di

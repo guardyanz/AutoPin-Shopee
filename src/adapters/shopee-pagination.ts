@@ -11,6 +11,14 @@ const NEXT_SELECTORS = [
 export interface ShopeeDiscoveryResult {
   candidates: ProductCandidate[]
   pagesScanned: number
+  diagnostics?: ShopeeDiscoveryDiagnostics
+}
+
+export interface ShopeeDiscoveryDiagnostics {
+  productsRead: number
+  productsMatchingFilters: number
+  affiliateLinkFailures: number
+  lastAffiliateError?: { code: string; message: string }
 }
 
 export type PageProductEnricher = (candidates: ProductCandidate[], limit: number) => Promise<ProductCandidate[]>

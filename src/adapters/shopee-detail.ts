@@ -41,7 +41,7 @@ export function extractAffiliateLink(root: ParentNode): string {
 
 export function extractAffiliateLinks(root: ParentNode): string[] {
   const candidates = [
-    ...Array.from(root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[value], textarea'))
+    ...Array.from(root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea'))
       .map((control) => control.value),
     ...Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href]'))
       .map((anchor) => anchor.href),

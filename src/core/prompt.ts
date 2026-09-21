@@ -10,8 +10,8 @@ Buat konten Pinterest berbahasa Indonesia untuk produk aksesori gadget berikut.
 FAKTA SUMBER
 - Nama: ${product.title}
 - Deskripsi: ${product.description ?? 'Tidak tersedia'}
-- Rating: ${product.rating}
-- Terjual: ${product.sold}
+- Rating: ${product.rating ?? 'Tidak tersedia'}
+- Terjual: ${product.sold ?? 'Tidak tersedia'}
 - Komisi affiliate: ${product.commissionPercent}%
 
 ATURAN

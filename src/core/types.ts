@@ -5,8 +5,8 @@ export interface ProductCandidate {
   title: string
   canonicalUrl: string
   price: number
-  rating: number
-  sold: number
+  rating: number | null
+  sold: number | null
   commissionPercent: number
   imageUrl: string
   description?: string

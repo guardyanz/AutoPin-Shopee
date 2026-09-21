@@ -144,6 +144,70 @@ test('loads, selects, and creates boards through the extension service worker', 
   }
 })
 
+test('discovers Affiliate offers without ratings through the installed content script', async () => {
+  const extensionPath = resolve('dist')
+  const profilePath = await mkdtemp(resolve(tmpdir(), 'autopin-shopee-discovery-'))
+  let context: BrowserContext | undefined
+  try {
+    context = await chromium.launchPersistentContext(profilePath, {
+      executablePath: chromeExecutable,
+      headless: false,
+      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, '--no-first-run', '--no-default-browser-check'],
+    })
+    const affiliateUrl = 'https://affiliate.shopee.co.id/offer/product_offer'
+    await context.route('https://down-id.img.susercontent.com/**', (route) => route.abort())
+    await context.route('https://affiliate.shopee.co.id/**', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><body><h1>Penawaran Produk</h1>
+        <div class="product-offer-item"><div class="ItemCard">
+          <a href="/offer/product_offer/1234"><span class="ItemCard__name">Produk mahal</span></a>
+          <img src="https://down-id.img.susercontent.com/file/a">
+          <span class="ItemCard__price">Rp13.999.000</span><span class="ItemCardSold__wrap">373 terjual</span><span class="commRate">Komisi hingga 1,5%</span>
+        </div><button>Buat Link</button></div>
+        <div class="product-offer-item"><div class="ItemCard">
+          <a href="/offer/product_offer/123"><span class="ItemCard__name">Lampu Meja</span></a>
+          <img src="https://down-id.img.susercontent.com/file/b">
+          <span class="ItemCard__price">Rp80.500</span><span class="ItemCardSold__wrap">3RB+ terjual</span><span class="commRate">Komisi hingga 11,5%</span>
+        </div><button id="make-link">Buat Link</button></div>
+        <script>
+          document.getElementById('make-link').addEventListener('click', () => {
+            const dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            const input = document.createElement('input');
+            input.value = 'https://s.shopee.co.id/lamp-test';
+            const close = document.createElement('button');
+            close.setAttribute('aria-label', 'Close');
+            close.addEventListener('click', () => dialog.remove());
+            dialog.append(input, close);
+            document.body.append(dialog);
+          });
+        </script></body></html>`,
+    }))
+    let [worker] = context.serviceWorkers()
+    worker ??= await context.waitForEvent('serviceworker')
+    const page = await context.newPage()
+    await page.goto(affiliateUrl)
+    await expect.poll(() => worker.evaluate(async (url) => {
+      const tabs = await chrome.tabs.query({ url })
+      try {
+        return (await chrome.tabs.sendMessage(tabs[0].id!, { type: 'SHOPEE_PREFLIGHT' }))?.ok
+      } catch { return false }
+    }, affiliateUrl)).toBe(true)
+    const result = await worker.evaluate(async (url) => {
+      const tabs = await chrome.tabs.query({ url })
+      return chrome.tabs.sendMessage(tabs[0].id!, { type: 'SHOPEE_DISCOVER', maxPages: 1, maxProducts: 1 })
+    }, affiliateUrl)
+    expect(result).toMatchObject({ ok: true, data: {
+      candidates: [{ id: '123', price: 80_500, sold: 3_000, rating: null, commissionPercent: 11.5, affiliateUrl: 'https://s.shopee.co.id/lamp-test' }],
+      diagnostics: { productsRead: 2, productsMatchingFilters: 1, affiliateLinkFailures: 0 },
+    } })
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0)
+  } finally {
+    await context?.close()
+    await rm(profilePath, { recursive: true, force: true })
+  }
+})
+
 function findChromiumExecutable(): string {
   const configured = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
   if (configured && existsSync(configured)) return configured

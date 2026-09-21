@@ -1,4 +1,5 @@
 import { validateGeneratedContent } from '../core/content-validation'
+import type { ShopeeDiscoveryResult } from '../adapters/shopee-pagination'
 import { buildPinGenerationPrompt } from '../core/prompt'
 import type { ExtensionMessage, MessageResponse } from '../core/messages'
 import { createDailySchedule, localDayKey } from '../core/scheduler'
@@ -419,12 +420,23 @@ async function discoverProducts(job: JobSnapshot): Promise<void> {
   await updateStatus('discover_products', `Scanning up to ${settings.discoveryMaxPages} Shopee Affiliate pages`, job.completedToday)
   const tabId = await ensureTab('affiliate.shopee.co.id', AFFILIATE_URL)
   await navigateAndWait(tabId, AFFILIATE_URL)
-  const result = await withSingleRetry(() => sendToTab<{ candidates: ProductCandidate[]; pagesScanned: number }>(tabId, {
+  const result = await withSingleRetry(() => sendToTab<ShopeeDiscoveryResult>(tabId, {
     type: 'SHOPEE_DISCOVER',
     maxPages: settings.discoveryMaxPages,
     maxProducts: Math.max(1, settings.dailyLimit - job.completedToday),
   }))
-  if (result.candidates.length === 0) throw new AutomationError('no_eligible_products', 'No usable products were found on the scanned Affiliate pages')
+  const diagnostics = result.diagnostics
+  if (diagnostics) {
+    await log('info', 'discover_products', `Scanned ${result.pagesScanned} page(s): ${diagnostics.productsRead} products read, ${diagnostics.productsMatchingFilters} passed filters, ${diagnostics.affiliateLinkFailures} affiliate links failed`)
+  }
+  if (result.candidates.length === 0) {
+    const message = !diagnostics || diagnostics.productsRead === 0
+      ? `Tidak ada kartu produk yang terbaca dari ${result.pagesScanned} halaman. Muat ulang halaman Shopee Affiliate lalu coba kembali.`
+      : diagnostics.productsMatchingFilters === 0
+        ? `${diagnostics.productsRead} produk terbaca, tetapi tidak ada yang lolos filter harga, komisi, dan metrik yang tersedia.`
+        : `${diagnostics.productsMatchingFilters} produk lolos filter, tetapi link affiliate gagal diperoleh. ${diagnostics.lastAffiliateError?.message ?? 'Periksa tombol Buat Link di Shopee Affiliate.'}`
+    throw new AutomationError('no_eligible_products', message)
+  }
   await repository.saveProducts(result.candidates)
   job.queueProductIds = result.candidates.map((candidate) => candidate.id)
   await transition(job, 'select_candidate', `Queued ${result.candidates.length} products from ${result.pagesScanned} page(s)`)

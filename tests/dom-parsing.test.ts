@@ -69,11 +69,29 @@ describe('Shopee DOM parsing', () => {
       id: '9988',
       title: 'Lampu Meja Minimalis',
       price: 129_000,
-      rating: 0,
-      sold: 0,
+      rating: null,
+      sold: null,
       commissionPercent: 15,
       imageUrl: 'https://down-id.img.susercontent.com/file/product',
     })])
     expect(normalizeShopeeImageUrl('https://img.susercontent.com/a@resize_w100_nl.webp?q=1')).toBe('https://img.susercontent.com/a')
+  })
+
+  it('reads compact Affiliate cards with plus-suffixed sales and no displayed rating', () => {
+    document.body.innerHTML = '<div class="product-offer-item"><a href="https://affiliate.shopee.co.id/offer/product_offer/9988"><span class="ItemCard__name">Lampu Meja</span></a><img src="https://down-id.img.susercontent.com/file/lamp"><span class="ItemCard__price">Rp80.500</span><span class="ItemCardSold__wrap">3RB+ terjual</span><span class="commRate">Komisi hingga 11,5%</span><button>Buat Link</button></div>'
+    expect(extractShopeeCandidates(document)).toEqual([expect.objectContaining({
+      id: '9988', price: 80_500, sold: 3_000, rating: null, commissionPercent: 11.5,
+    })])
+  })
+
+  it('does not mistake a commission percentage for a product rating', () => {
+    document.body.innerHTML = `
+      <div class="product-offer-item">
+        <a href="https://affiliate.shopee.co.id/offer/product_offer/9988">Lampu</a>
+        <img src="https://down-id.img.susercontent.com/file/lamp">
+        <span>Rp80.500</span><span>3RB+ terjual</span><span>Komisi hingga 4,9%</span>
+      </div>
+    `
+    expect(extractShopeeCandidates(document)[0]).toMatchObject({ rating: null, sold: 3_000, commissionPercent: 4.9 })
   })
 })

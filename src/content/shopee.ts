@@ -1,13 +1,13 @@
-import { extractShopeeCandidates } from '../adapters/shopee-dom'
+import { extractShopeeCandidates, findShopeeProductCard } from '../adapters/shopee-dom'
 import {
   detectShopeePageState,
   extractAffiliateLink,
   extractAffiliateLinks,
   extractShopeeProductDetail,
 } from '../adapters/shopee-detail'
-import { evaluateEligibility, rankProducts } from '../core/eligibility'
+import { rankProducts } from '../core/eligibility'
 import type { ExtensionMessage, MessageResponse } from '../core/messages'
-import { discoverShopeePages } from '../adapters/shopee-pagination'
+import { discoverShopeePages, type ShopeeDiscoveryDiagnostics } from '../adapters/shopee-pagination'
 
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !message.type.startsWith('SHOPEE_')) return
@@ -31,13 +31,14 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
     case 'SHOPEE_DISCOVER': {
       const state = detectShopeePageState(document)
       if (state !== 'ready') throw codedError(state, `Shopee page is not ready: ${state}`)
+      const diagnostics: ShopeeDiscoveryDiagnostics = { productsRead: 0, productsMatchingFilters: 0, affiliateLinkFailures: 0 }
       const discovery = await discoverShopeePages(
         document,
         message.maxPages,
         message.maxProducts,
-        enrichAffiliateLinks,
+        (candidates, limit) => enrichAffiliateLinks(candidates, limit, diagnostics),
       )
-      return { candidates: rankProducts(discovery.candidates), pagesScanned: discovery.pagesScanned }
+      return { candidates: rankProducts(discovery.candidates), pagesScanned: discovery.pagesScanned, diagnostics }
     }
     case 'SHOPEE_EXTRACT':
       return { product: extractShopeeProductDetail(document, message.candidate) }
@@ -48,24 +49,24 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
   }
 }
 
-function hasIncompleteMetrics(candidate: ReturnType<typeof extractShopeeCandidates>[number]): boolean {
-  return candidate.rating <= 0 || candidate.sold <= 0 || candidate.commissionPercent <= 0
-}
-
 async function enrichAffiliateLinks(
   candidates: ReturnType<typeof extractShopeeCandidates>,
   limit: number,
+  diagnostics: ShopeeDiscoveryDiagnostics,
 ): Promise<ReturnType<typeof extractShopeeCandidates>> {
   const usable = rankProducts(candidates)
-    .filter((candidate) => hasIncompleteMetrics(candidate) || evaluateEligibility(candidate).eligible)
-    .slice(0, limit)
+  diagnostics.productsRead += candidates.length
+  diagnostics.productsMatchingFilters += usable.length
   const enriched: ReturnType<typeof extractShopeeCandidates> = []
 
   for (const candidate of usable) {
+    if (enriched.length >= limit) break
     try {
       const affiliateUrl = await generateAffiliateLink(candidate.id)
       enriched.push({ ...candidate, affiliateUrl })
     } catch (error) {
+      diagnostics.affiliateLinkFailures += 1
+      diagnostics.lastAffiliateError = normalizeError(error)
       console.warn('[AutoPin Shopee] Skipping product without an affiliate link', candidate.id, error)
     }
   }
@@ -73,7 +74,7 @@ async function enrichAffiliateLinks(
 }
 
 async function generateAffiliateLink(productId: string): Promise<string> {
-  const card = findProductCard(productId)
+  const card = findShopeeProductCard(document, productId)
   if (!card) throw codedError('product_card_missing', 'Shopee affiliate product card was not found')
   const existing = extractAffiliateLink(card)
   if (existing) return existing
@@ -99,14 +100,6 @@ function closeAffiliateDialog(): void {
   const dialog = document.querySelector<HTMLElement>('.ant-modal-root, .ant-modal, [role="dialog"]')
   const close = dialog?.querySelector<HTMLElement>('.ant-modal-close, button[aria-label="Close" i], button[aria-label="Tutup" i]')
   close?.click()
-}
-
-function findProductCard(productId: string): HTMLElement | null {
-  const explicit = document.querySelector<HTMLElement>(`[data-product-id="${CSS.escape(productId)}"]`)
-  if (explicit) return explicit
-  const link = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'))
-    .find((anchor) => anchor.href.includes(productId))
-  return link?.closest<HTMLElement>('article, li, [role="listitem"], [class*="card" i]') ?? null
 }
 
 async function waitForValue(
