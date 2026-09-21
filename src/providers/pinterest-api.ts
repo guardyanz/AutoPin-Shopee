@@ -40,7 +40,7 @@ export class PinterestApiClient {
     const boards: PinterestBoard[] = []
     let bookmark = ''
     do {
-      const query = new URLSearchParams({ page_size: '100' })
+      const query = new URLSearchParams({ page_size: '250' })
       if (bookmark) query.set('bookmark', bookmark)
       const page = await this.request<{ items?: PinterestBoard[]; bookmark?: string | null }>(`/boards?${query}`)
       boards.push(...(page.items ?? []))
@@ -103,13 +103,35 @@ export class PinterestApiClient {
     if (!response.ok) {
       const correlationId = response.headers.get('x-pinterest-rid') ?? response.headers.get('x-request-id') ?? ''
       const retryable = response.status === 429 || response.status >= 500
+      const detail = await pinterestErrorDetail(response)
+      const fallback = response.status === 401
+        ? 'Pinterest rejected the access token. Make sure the token matches the selected Sandbox or Production environment.'
+        : `Pinterest API request failed with HTTP ${response.status}`
       throw new PinterestApiError(
         `pinterest_http_${response.status}`,
-        `Pinterest API request failed with HTTP ${response.status}${correlationId ? ` (${correlationId})` : ''}`,
+        `${detail || fallback}${correlationId ? ` (request ${correlationId})` : ''}`,
         retryable,
       )
     }
     return response.json() as Promise<T>
+  }
+}
+
+async function pinterestErrorDetail(response: Response): Promise<string> {
+  try {
+    const text = (await response.text()).trim()
+    if (!text) return ''
+    const payload = JSON.parse(text) as { message?: unknown; error?: { message?: unknown } | string }
+    const detail = typeof payload.message === 'string'
+      ? payload.message
+      : typeof payload.error === 'string'
+        ? payload.error
+        : typeof payload.error?.message === 'string'
+          ? payload.error.message
+          : ''
+    return detail.replace(/\s+/g, ' ').trim().slice(0, 300)
+  } catch {
+    return ''
   }
 }
 

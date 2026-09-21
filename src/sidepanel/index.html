@@ -166,8 +166,8 @@
           <div class="field-group">
             <label for="pinterest-environment">Pinterest API environment</label>
             <select id="pinterest-environment">
-              <option value="sandbox">Sandbox / Trial</option>
-              <option value="production">Production / Standard</option>
+              <option value="sandbox">Sandbox (requires a Sandbox token)</option>
+              <option value="production">Production (Trial or Standard token)</option>
             </select>
           </div>
 
@@ -183,18 +183,24 @@
           <p class="save-state" id="pinterest-connection-state">Not connected</p>
 
           <div class="field-group">
-            <label for="pinterest-token">Pinterest access token (Trial fallback)</label>
-            <input id="pinterest-token" type="password" autocomplete="off" spellcheck="false" placeholder="Use a short-lived Trial token during development" />
+            <label for="pinterest-token">Pinterest access token</label>
+            <input id="pinterest-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a token or use Connect account" />
+            <small>Sandbox and Production tokens are different. Select the environment that issued this token.</small>
           </div>
 
           <div class="field-group">
-            <label for="pinterest-board-id">Pinterest board ID</label>
-            <input id="pinterest-board-id" type="text" inputmode="numeric" pattern="\d+" placeholder="Numeric Board ID owned by the connected account" />
+            <label for="pinterest-board-id">Pinterest Board</label>
+            <select id="pinterest-board-id">
+              <option value="">Muat Board dari Pinterest terlebih dahulu</option>
+            </select>
+            <small id="board-list-state">Pilih environment dan token, lalu muat daftar Board.</small>
           </div>
 
+          <button class="button button-full" id="load-boards" type="button"><i data-lucide="refresh-cw"></i><span>Muat Board dari Pinterest</span></button>
+
           <div class="field-group">
-            <label for="board-name">Board label</label>
-            <input id="board-name" type="text" placeholder="Used in local publication history" />
+            <label for="board-name">Nama Board</label>
+            <input id="board-name" type="text" minlength="3" maxlength="180" placeholder="Dipakai saat membuat Board baru" />
           </div>
 
           <div class="field-group">

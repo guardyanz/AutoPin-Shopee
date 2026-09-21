@@ -9,6 +9,7 @@ export type ExtensionMessage =
   | { type: 'TEST_PROVIDER'; provider: ProviderId }
   | { type: 'CONNECT_PINTEREST' }
   | { type: 'DISCONNECT_PINTEREST' }
+  | { type: 'LIST_PINTEREST_BOARDS' }
   | { type: 'CREATE_PINTEREST_BOARD'; name: string; description: string }
   | { type: 'START_AUTOMATION' }
   | { type: 'PAUSE_AUTOMATION' }

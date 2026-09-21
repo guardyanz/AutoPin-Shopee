@@ -23,6 +23,7 @@ import type { ExtensionMessage, MessageResponse } from '../core/messages'
 import type { ActivityEntry, RuntimeStatus } from '../core/runtime'
 import type { AutomationSettings } from '../core/settings'
 import type { ProviderId, ProviderModel } from '../core/types'
+import type { PinterestBoard } from '../providers/pinterest-api'
 import type { PublicationRecord } from '../storage/types'
 
 interface DashboardData {
@@ -48,6 +49,7 @@ let settings: AutomationSettings | null = null
 let dashboard: DashboardData | null = null
 let toastTimer: number | undefined
 let renderedReviewKey = ''
+let pinterestBoards: PinterestBoard[] = []
 
 document.addEventListener('DOMContentLoaded', () => {
   createIcons({ icons: iconSet })
@@ -92,7 +94,14 @@ function bindSettings(): void {
   element<HTMLButtonElement>('test-provider').addEventListener('click', () => void testProvider())
   element<HTMLButtonElement>('connect-pinterest').addEventListener('click', () => void connectPinterest())
   element<HTMLButtonElement>('disconnect-pinterest').addEventListener('click', () => void disconnectPinterest())
+  element<HTMLButtonElement>('load-boards').addEventListener('click', () => void loadPinterestBoards(true))
   element<HTMLButtonElement>('create-board').addEventListener('click', () => void createPinterestBoard())
+  element<HTMLSelectElement>('pinterest-board-id').addEventListener('change', selectPinterestBoard)
+  element<HTMLSelectElement>('pinterest-environment').addEventListener('change', () => {
+    pinterestBoards = []
+    renderBoardOptions()
+    element('board-list-state').textContent = 'Environment changed. Muat ulang daftar Board dengan token yang sesuai.'
+  })
   element<HTMLFormElement>('settings-form').addEventListener('submit', (event) => {
     event.preventDefault()
     void persistSettings()
@@ -259,7 +268,7 @@ function renderSettings(): void {
   element<HTMLSelectElement>('pinterest-environment').value = settings.pinterestEnvironment
   element<HTMLInputElement>('oauth-worker-url').value = settings.pinterestOAuthWorkerUrl
   element<HTMLInputElement>('pinterest-token').value = settings.pinterestAccessToken
-  element<HTMLInputElement>('pinterest-board-id').value = settings.pinterestBoardId
+  renderBoardOptions()
   element<HTMLInputElement>('board-name').value = settings.boardName
   element<HTMLTextAreaElement>('board-description').value = settings.boardDescription
   element<HTMLInputElement>('discovery-pages').value = String(settings.discoveryMaxPages)
@@ -285,11 +294,36 @@ function captureCurrentProviderFields(): void {
   settings.pinterestEnvironment = element<HTMLSelectElement>('pinterest-environment').value === 'production' ? 'production' : 'sandbox'
   settings.pinterestOAuthWorkerUrl = element<HTMLInputElement>('oauth-worker-url').value.trim().replace(/\/$/, '')
   settings.pinterestAccessToken = element<HTMLInputElement>('pinterest-token').value.trim()
-  settings.pinterestBoardId = element<HTMLInputElement>('pinterest-board-id').value.trim()
+  settings.pinterestBoardId = element<HTMLSelectElement>('pinterest-board-id').value.trim()
   settings.boardName = element<HTMLInputElement>('board-name').value.trim()
   settings.boardDescription = element<HTMLTextAreaElement>('board-description').value.trim()
   settings.discoveryMaxPages = Number.parseInt(element<HTMLInputElement>('discovery-pages').value, 10) || 3
   settings.developerDryRun = element<HTMLInputElement>('dry-run').checked
+}
+
+function renderBoardOptions(): void {
+  const select = element<HTMLSelectElement>('pinterest-board-id')
+  const selectedId = settings?.pinterestBoardId ?? ''
+  const options = pinterestBoards.map((board) => option(board.id, `${board.name} · ${board.id}`))
+  if (selectedId && !pinterestBoards.some((board) => board.id === selectedId)) {
+    options.unshift(option(selectedId, `${settings?.boardName || 'Board tersimpan'} · ${selectedId}`))
+  }
+  select.replaceChildren(option('', 'Pilih Board'), ...options)
+  select.value = selectedId
+}
+
+function selectPinterestBoard(): void {
+  if (!settings) return
+  const boardId = element<HTMLSelectElement>('pinterest-board-id').value
+  const board = pinterestBoards.find((candidate) => candidate.id === boardId)
+  settings.pinterestBoardId = boardId
+  if (board) {
+    settings.boardName = board.name
+    settings.boardDescription = board.description ?? ''
+    element<HTMLInputElement>('board-name').value = board.name
+    element<HTMLTextAreaElement>('board-description').value = board.description ?? ''
+    element('board-list-state').textContent = `Board terpilih: ${board.name}`
+  }
 }
 
 function renderModelOptions(models: ProviderModel[], primary: string, fallback: string): void {
@@ -303,16 +337,18 @@ function renderModelOptions(models: ProviderModel[], primary: string, fallback: 
   fallbackSelect.value = fallback
 }
 
-async function persistSettings(): Promise<void> {
-  if (!settings) return
+async function persistSettings(showConfirmation = true): Promise<boolean> {
+  if (!settings) return false
   captureCurrentProviderFields()
   try {
     settings = await sendMessage<AutomationSettings>({ type: 'SAVE_SETTINGS', settings })
     element('save-state').textContent = 'Saved'
-    showToast('Settings saved')
+    if (showConfirmation) showToast('Settings saved')
     window.setTimeout(() => { element('save-state').textContent = '' }, 2_000)
+    return true
   } catch (error) {
     showToast(messageFromError(error), true)
+    return false
   }
 }
 
@@ -356,6 +392,7 @@ async function connectPinterest(): Promise<void> {
   try {
     await sendMessage({ type: 'CONNECT_PINTEREST' })
     await loadSettings()
+    await loadPinterestBoards(false)
     showToast('Pinterest OAuth connected')
   } catch (error) {
     showToast(messageFromError(error), true)
@@ -369,6 +406,7 @@ async function disconnectPinterest(): Promise<void> {
   setBusy('disconnect-pinterest', true)
   try {
     await sendMessage({ type: 'DISCONNECT_PINTEREST' })
+    pinterestBoards = []
     await loadSettings()
     showToast('Pinterest disconnected')
   } catch (error) {
@@ -378,10 +416,32 @@ async function disconnectPinterest(): Promise<void> {
   }
 }
 
+async function loadPinterestBoards(showConfirmation: boolean): Promise<void> {
+  if (!settings) return
+  captureCurrentProviderFields()
+  if (!await persistSettings(false)) return
+  setBusy('load-boards', true)
+  element('board-list-state').textContent = 'Memuat Board dari Pinterest...'
+  try {
+    const result = await sendMessage<{ boards: PinterestBoard[]; environment: 'sandbox' | 'production' }>({ type: 'LIST_PINTEREST_BOARDS' })
+    pinterestBoards = result.boards
+    renderBoardOptions()
+    element('board-list-state').textContent = result.boards.length > 0
+      ? `${result.boards.length} Board ditemukan di ${result.environment}.`
+      : `Tidak ada Board yang ditemukan di ${result.environment}. Buat Board baru di bawah ini atau periksa environment token.`
+    if (showConfirmation) showToast(result.boards.length > 0 ? `${result.boards.length} Board dimuat` : 'Tidak ada Board pada environment ini')
+  } catch (error) {
+    element('board-list-state').textContent = messageFromError(error)
+    showToast(messageFromError(error), true)
+  } finally {
+    setBusy('load-boards', false)
+  }
+}
+
 async function createPinterestBoard(): Promise<void> {
   if (!settings) return
   captureCurrentProviderFields()
-  await persistSettings()
+  if (!await persistSettings(false)) return
   if (!window.confirm('Create this Board on the connected Pinterest account?')) return
   setBusy('create-board', true)
   try {
@@ -391,8 +451,11 @@ async function createPinterestBoard(): Promise<void> {
       description: element<HTMLTextAreaElement>('board-description').value,
     })
     await loadSettings()
+    await loadPinterestBoards(false)
+    element('board-list-state').textContent = `Board berhasil dibuat dan dipilih: ${result.name}`
     showToast(`Board created · ${result.id}`)
   } catch (error) {
+    element('board-list-state').textContent = messageFromError(error)
     showToast(messageFromError(error), true)
   } finally {
     setBusy('create-board', false)

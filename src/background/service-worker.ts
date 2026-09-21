@@ -6,7 +6,7 @@ import { validateSettingsForStart, type AutomationSettings } from '../core/setti
 import { nextConsecutiveFailureCount } from '../core/state-machine'
 import type { JobState, ProductCandidate, ProviderId } from '../core/types'
 import { createProviderClient } from '../providers/clients'
-import { PinterestApiClient, PinterestApiError } from '../providers/pinterest-api'
+import { PinterestApiClient, PinterestApiError, type PinterestBoard } from '../providers/pinterest-api'
 import { createAutomationRepository } from '../storage/repository'
 import {
   appendActivity,
@@ -95,6 +95,8 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
       return connectPinterest()
     case 'DISCONNECT_PINTEREST':
       return disconnectPinterest()
+    case 'LIST_PINTEREST_BOARDS':
+      return listPinterestBoards()
     case 'CREATE_PINTEREST_BOARD':
       return createPinterestBoard(message.name, message.description)
     case 'START_AUTOMATION':
@@ -168,6 +170,15 @@ async function disconnectPinterest(): Promise<{ disconnected: true }> {
   await saveSettings(settings)
   await log('info', 'idle', 'Pinterest OAuth tokens removed from local extension storage')
   return { disconnected: true }
+}
+
+async function listPinterestBoards(): Promise<{ boards: PinterestBoard[]; environment: AutomationSettings['pinterestEnvironment'] }> {
+  const settings = await loadSettings()
+  const pinterest = await createPinterestClient(settings)
+  const boards = (await pinterest.listBoards())
+    .filter((board) => /^\d+$/.test(board.id) && Boolean(board.name?.trim()))
+    .sort((left, right) => left.name.localeCompare(right.name))
+  return { boards, environment: settings.pinterestEnvironment }
 }
 
 async function createPinterestBoard(nameValue: string, descriptionValue: string): Promise<{ id: string; name: string }> {

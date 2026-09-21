@@ -66,11 +66,14 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
 1. Buka side panel **AutoPin Shopee**.
 2. Di tab **Settings**, pilih provider AI dan isi API key.
 3. Klik **Fetch Models**, pilih model utama, dan simpan.
-4. Masukkan product-limited Pinterest Trial token, pilih Sandbox, dan isi Board ID.
-5. Tentukan jumlah halaman Shopee yang akan dipindai (1–10).
-6. Biarkan **Developer dry run** aktif untuk percobaan pertama.
-7. Klik **Start**, lalu periksa poster, copy, disclosure, Board, jadwal, dan link.
-8. Nonaktifkan dry run dan tekan **Approve Pin** hanya untuk draft yang sudah benar.
+4. Pilih environment yang menerbitkan token Pinterest Anda: token Sandbox untuk
+   **Sandbox**, atau product-limited Trial/Standard token untuk **Production**.
+5. Klik **Muat Board dari Pinterest**, lalu pilih Board dari daftar. Untuk membuat
+   Board baru, isi nama/deskripsi dan klik **Create this Board through API**.
+6. Tentukan jumlah halaman Shopee yang akan dipindai (1–10).
+7. Biarkan **Developer dry run** aktif untuk percobaan pertama.
+8. Klik **Start**, lalu periksa poster, copy, disclosure, Board, jadwal, dan link.
+9. Nonaktifkan dry run dan tekan **Approve Pin** hanya untuk draft yang sudah benar.
 
 Product-limited Trial token bersifat sementara. Untuk Standard access, gunakan
 OAuth Authorization Code melalui backend yang menjaga App Secret tetap server-side.

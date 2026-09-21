@@ -10,7 +10,7 @@ describe('Pinterest API client', () => {
     const client = new PinterestApiClient('pina_test', 'sandbox', fetcher)
 
     await expect(client.listBoards()).resolves.toEqual([{ id: '1', name: 'One' }, { id: '2', name: 'Two' }])
-    expect(fetcher.mock.calls[0][0]).toBe('https://api-sandbox.pinterest.com/v5/boards?page_size=100')
+    expect(fetcher.mock.calls[0][0]).toBe('https://api-sandbox.pinterest.com/v5/boards?page_size=250')
     expect(fetcher.mock.calls[1][0]).toContain('bookmark=next')
   })
 
@@ -46,5 +46,18 @@ describe('Pinterest API client', () => {
 
   it('rejects unsupported poster data', () => {
     expect(() => parseImageDataUrl('data:image/webp;base64,aA==')).toThrow(PinterestApiError)
+  })
+
+  it('surfaces a safe Pinterest API error message for configuration failures', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: 29,
+      message: 'Board write permission is required.',
+    }), { status: 403, headers: { 'Content-Type': 'application/json', 'x-pinterest-rid': 'request-123' } }))
+    const client = new PinterestApiClient('pina_test', 'sandbox', fetcher)
+
+    await expect(client.createBoard('SHOPEE')).rejects.toMatchObject({
+      code: 'pinterest_http_403',
+      message: 'Board write permission is required. (request request-123)',
+    })
   })
 })
