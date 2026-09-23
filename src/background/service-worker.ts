@@ -678,6 +678,14 @@ async function handleWorkflowError(error: unknown): Promise<void> {
     return
   }
 
+  if (['preflight', 'research_due_check', 'discover_products', 'select_candidate'].includes(job.state) || !job.activeProductId) {
+    job.state = 'stopped'
+    job.updatedAt = Date.now()
+    await repository.saveJob(job)
+    await updateStatus('stopped', `${normalized.code}: ${normalized.message}`, job.completedToday, undefined, undefined, normalized.message)
+    return
+  }
+
   const failure = nextConsecutiveFailureCount(job.consecutiveFailures, false)
   job.consecutiveFailures = failure.count
   if (failure.circuitOpen) {
@@ -862,7 +870,17 @@ async function sendToTab<T = unknown>(tabId: number, message: ExtensionMessage):
   try {
     response = await chrome.tabs.sendMessage(tabId, message) as MessageResponse<T>
   } catch (error) {
-    throw new AutomationError('content_script_unavailable', error instanceof Error ? error.message : 'Content script is unavailable')
+    if (error instanceof Error && /Receiving end does not exist/i.test(error.message)) {
+      try {
+        await chrome.tabs.reload(tabId)
+        await waitForTabComplete(tabId)
+        response = await chrome.tabs.sendMessage(tabId, message) as MessageResponse<T>
+      } catch (retryError) {
+        throw new AutomationError('content_script_unavailable', retryError instanceof Error ? retryError.message : 'Content script is unavailable after tab reload')
+      }
+    } else {
+      throw new AutomationError('content_script_unavailable', error instanceof Error ? error.message : 'Content script is unavailable')
+    }
   }
   if (!response?.ok) throw new AutomationError(response?.error.code ?? 'adapter_error', response?.error.message ?? 'Adapter request failed')
   return response.data

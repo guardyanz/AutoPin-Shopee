@@ -103,6 +103,11 @@ Workflow berhenti bila menemukan login kedaluwarsa, CAPTCHA, kuota harian, atau
 tiga kegagalan produk berturut-turut. Selesaikan tindakan manual yang diperlukan,
 periksa tab **Activity**, lalu pilih **Resume**.
 
+Jika skrip ekstensi belum terpasang pada tab Shopee Affiliate setelah ekstensi
+di-reload, AutoPin memuat ulang tab tersebut dan mencoba menghubungkannya kembali.
+Jika koneksi tetap gagal, Dashboard menampilkan pesan aslinya; muat ulang tab
+Shopee Affiliate secara manual dan klik **Start** lagi.
+
 DOM Shopee dan Pinterest dapat berubah sewaktu-waktu. Jalankan dry run setelah
 setiap perubahan besar pada situs dan patuhi ketentuan Shopee Affiliate serta
 Pinterest yang berlaku pada akun Anda.
