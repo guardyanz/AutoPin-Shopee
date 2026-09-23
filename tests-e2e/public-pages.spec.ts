@@ -13,7 +13,7 @@ test('public app and policy pages are complete, linked, and responsive', async (
     })
 
     await page.goto(pathToFileURL(resolve('docs/index.html')).href)
-    await expect(page.getByRole('heading', { name: 'From a selected product to an approved Pin.' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'From selected products to approved Pins.' })).toBeVisible()
     await expect(page.getByText('No Pinterest passwords, session cookies, engagement automation, or Pinterest scraping.')).toBeVisible()
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await page.screenshot({ path: 'artifacts/public-site-390x844.png', fullPage: true })

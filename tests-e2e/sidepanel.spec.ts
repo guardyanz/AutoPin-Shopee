@@ -50,6 +50,7 @@ test('loads the unpacked extension side panel without layout overflow', async ()
     await expect(page.locator('#api-key')).toBeVisible()
     await expect(page.locator('#primary-model')).toBeVisible()
     await expect(page.locator('#discovery-pages')).toHaveValue('3')
+    await expect(page.locator('#affiliate-tags')).toHaveValue('')
     await expect(page.locator('#pinterest-environment')).toHaveValue('sandbox')
     await expect(page.locator('#pinterest-token')).toBeVisible()
     await expect(page.locator('#pinterest-board-id')).toHaveRole('combobox')
@@ -201,6 +202,73 @@ test('discovers Affiliate offers without ratings through the installed content s
       candidates: [{ id: '123', price: 80_500, sold: 3_000, rating: null, commissionPercent: 11.5, affiliateUrl: 'https://s.shopee.co.id/lamp-test' }],
       diagnostics: { productsRead: 2, productsMatchingFilters: 1, affiliateLinkFailures: 0 },
     } })
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0)
+  } finally {
+    await context?.close()
+    await rm(profilePath, { recursive: true, force: true })
+  }
+})
+
+test('uses Shopee’s tag form when generating an Affiliate shortlink', async () => {
+  const extensionPath = resolve('dist')
+  const profilePath = await mkdtemp(resolve(tmpdir(), 'autopin-shopee-tags-'))
+  let context: BrowserContext | undefined
+  try {
+    context = await chromium.launchPersistentContext(profilePath, {
+      executablePath: chromeExecutable, headless: false,
+      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, '--no-first-run', '--no-default-browser-check'],
+    })
+    const affiliateUrl = 'https://affiliate.shopee.co.id/offer/product_offer'
+    await context.route('https://down-id.img.susercontent.com/**', (route) => route.abort())
+    await context.route('https://affiliate.shopee.co.id/**', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><body><h1>Penawaran Produk</h1>
+        <div class="product-offer-item"><div class="ItemCard">
+          <a href="/offer/product_offer/123"><span class="ItemCard__name">Lampu Meja</span></a>
+          <img src="https://down-id.img.susercontent.com/file/lamp">
+          <span class="ItemCard__price">Rp80.500</span><span class="ItemCardSold__wrap">3RB+ terjual</span>
+          <span class="commRate">Komisi hingga 11,5%</span>
+        </div><button id="make-link">Buat Link</button></div>
+        <script>
+          document.getElementById('make-link').addEventListener('click', () => {
+            const dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            dialog.innerHTML = '<h2>Link Penawaran Produk</h2><div>Pakai Tag <label><input type="radio" name="use-tag" value="no" checked>Tidak</label><label><input type="radio" name="use-tag" value="yes">Iya</label></div>'
+              + '<label>Tag ke 1<input type="text" placeholder="Contoh: SepatuOlahraga"></label>'
+              + '<label>Tag ke 2<input type="text"></label>'
+              + '<button type="button" id="add-tags">Tambahkan ke Link</button>'
+              + '<button type="button" aria-label="Close">Tutup</button>';
+            dialog.querySelector('#add-tags').addEventListener('click', () => {
+              const tags = Array.from(dialog.querySelectorAll('input[type="text"]')).map((input) => input.value);
+              document.body.dataset.appliedTags = tags.join(',');
+              if (dialog.querySelector('input[value="yes"]').checked && tags[0] === 'PinterestFeed') {
+                const textarea = document.createElement('textarea');
+                textarea.value = 'https://s.shopee.co.id/tagged-pinterest-feed';
+                dialog.append(textarea);
+              }
+            });
+            dialog.querySelector('[aria-label="Close"]').addEventListener('click', () => dialog.remove());
+            document.body.append(dialog);
+          });
+        </script></body></html>`,
+    }))
+    let [worker] = context.serviceWorkers()
+    worker ??= await context.waitForEvent('serviceworker')
+    const page = await context.newPage()
+    await page.goto(affiliateUrl)
+    await expect.poll(() => worker.evaluate(async (url) => {
+      const tabs = await chrome.tabs.query({ url })
+      try { return (await chrome.tabs.sendMessage(tabs[0].id!, { type: 'SHOPEE_PREFLIGHT' }))?.ok }
+      catch { return false }
+    }, affiliateUrl)).toBe(true)
+    const response = await worker.evaluate(async (url) => {
+      const tabs = await chrome.tabs.query({ url })
+      return chrome.tabs.sendMessage(tabs[0].id!, {
+        type: 'SHOPEE_DISCOVER', maxPages: 1, maxProducts: 1, affiliateTags: ['PinterestFeed'],
+      })
+    }, affiliateUrl)
+    expect(response).toMatchObject({ ok: true, data: { candidates: [{ affiliateUrl: 'https://s.shopee.co.id/tagged-pinterest-feed' }] } })
+    expect(await page.locator('body').getAttribute('data-applied-tags')).toBe('PinterestFeed,')
     await expect(page.locator('[role="dialog"]')).toHaveCount(0)
   } finally {
     await context?.close()

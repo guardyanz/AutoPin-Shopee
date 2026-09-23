@@ -19,7 +19,7 @@ import {
   setRuntimeStatus,
 } from '../storage/runtime-store'
 import { loadSettings, saveSettings } from '../storage/settings-store'
-import type { JobSnapshot, PublicationRecord } from '../storage/types'
+import type { JobSnapshot, PinDraft, PublicationRecord } from '../storage/types'
 
 const AFFILIATE_URL = 'https://affiliate.shopee.co.id/offer/product_offer'
 const RUN_ALARM = 'affiliate-pin-run'
@@ -29,7 +29,7 @@ let advancePromise: Promise<void> | null = null
 
 chrome.runtime.onInstalled.addListener(() => {
   void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
-  void initializeDefaults()
+  void initializeDefaults().then(resumeFromCheckpoint)
 })
 
 chrome.runtime.onStartup.addListener(() => {
@@ -64,24 +64,21 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
     case 'GET_DASHBOARD':
       {
         const status = await getRuntimeStatus()
-        const payload = status.state === 'awaiting_approval' ? await getRuntimePayload() : {}
-        const settings = await loadSettings()
+        const job = status.state === 'awaiting_approval' ? await repository.loadJob() : undefined
+        const drafts = job ? await Promise.all((job.draftProductIds ?? []).map((id) => repository.getDraft(id))) : []
         return {
           status,
           activity: await getActivityLog(),
           publications: await repository.listRecentPublications(20),
-          review: status.state === 'awaiting_approval' && payload.activeProduct?.affiliateUrl && payload.generatedContent && payload.posterDataUrl
-            ? {
-                productTitle: payload.activeProduct.title,
-                posterDataUrl: payload.posterDataUrl,
-                title: payload.generatedContent.pinTitle,
-                description: payload.generatedContent.pinDescription,
-                altText: payload.generatedContent.altText,
-                destinationUrl: payload.activeProduct.affiliateUrl,
-                boardId: settings.pinterestBoardId,
-                boardLabel: settings.boardName,
-              }
-            : null,
+          reviews: drafts.filter((draft): draft is PinDraft => Boolean(draft)).map((draft) => ({
+            productId: draft.id,
+            productTitle: draft.product.title,
+            title: draft.content.pinTitle,
+            destinationUrl: draft.product.affiliateUrl,
+            boardId: draft.boardId,
+            boardLabel: draft.boardLabel,
+            reviewed: (job?.reviewedProductIds ?? []).includes(draft.id),
+          })),
         }
       }
     case 'GET_SETTINGS':
@@ -106,8 +103,10 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
       return pauseAutomation()
     case 'RESUME_AUTOMATION':
       return resumeAutomation()
-    case 'APPROVE_CURRENT_PIN':
-      return approveCurrentPin()
+    case 'GET_DRAFT_PREVIEW':
+      return getDraftPreview(message.productId)
+    case 'APPROVE_PIN_BATCH':
+      return approvePinBatch(message.productIds)
     case 'UPDATE_PIN_DRAFT':
       return updatePinDraft(message)
     case 'STOP_AUTOMATION':
@@ -200,6 +199,11 @@ async function createPinterestBoard(nameValue: string, descriptionValue: string)
 }
 
 async function startAutomation(): Promise<{ started: true }> {
+  const existingJob = await repository.loadJob()
+  if (existingJob && !['idle', 'stopped', 'daily_limit_reached'].includes(existingJob.state)) {
+    throw new AutomationError('job_already_running', 'Stop or finish the current batch before starting another')
+  }
+  for (const id of existingJob?.draftProductIds ?? []) await repository.deleteDraft(id)
   const settings = await loadSettings()
   const settingsErrors = validateSettingsForStart(settings)
   if (settingsErrors.length > 0) throw new AutomationError(settingsErrors[0], 'Complete provider settings before starting')
@@ -210,19 +214,14 @@ async function startAutomation(): Promise<{ started: true }> {
     return { started: true }
   }
 
-  const windowHours = randomInteger(settings.minimumWindowHours, settings.maximumWindowHours)
-  const scheduledSlots = createDailySchedule({
-    startAt: Date.now(),
-    windowHours,
-    requestedCount: settings.dailyLimit - completedToday,
-    dailyCap: settings.dailyLimit,
-    minSpacingMinutes: 20,
-  })
   const job: JobSnapshot = {
     id: 'active',
     state: 'preflight',
     queueProductIds: [],
-    scheduledSlots,
+    draftProductIds: [],
+    reviewedProductIds: [],
+    approvedProductIds: [],
+    scheduledSlots: [],
     nextSlotIndex: 0,
     completedToday,
     consecutiveFailures: 0,
@@ -230,13 +229,14 @@ async function startAutomation(): Promise<{ started: true }> {
   }
   await repository.saveJob(job)
   await clearRuntimePayload()
-  await log('info', 'preflight', `Automation started with ${scheduledSlots.length} slots over ${windowHours} hours`)
+  await log('info', 'preflight', `Preparing up to ${settings.dailyLimit - completedToday} Pin drafts for one batch review`)
   void runAdvance()
   return { started: true }
 }
 
 async function pauseAutomation(): Promise<{ paused: true }> {
   const job = await requireJob()
+  job.pausedFrom = job.state
   job.state = 'paused'
   job.updatedAt = Date.now()
   await repository.saveJob(job)
@@ -251,11 +251,25 @@ async function resumeAutomation(): Promise<{ resumed: true }> {
   if (!['paused', 'authentication_required', 'captcha_detected', 'circuit_open'].includes(job.state)) {
     throw new AutomationError('not_paused', 'Automation is not in a resumable state')
   }
-  job.state = 'preflight'
+  if (job.publishOutcomeAmbiguous) {
+    throw new AutomationError('pinterest_publish_ambiguous', 'Pinterest may have created this Pin. Check the account before starting a new batch; automatic retry is disabled.')
+  }
+  const approvedPending = (job.approvedProductIds?.length ?? 0) > (job.nextSlotIndex ?? 0)
+  const resumablePublishStage = ['await_publish_slot', 'fill_pinterest', 'publish_pinterest', 'verify_publication', 'commit_result', 'cleanup']
+  const hasUnapprovedDrafts = (job.draftProductIds?.length ?? 0) > 0
+  job.state = approvedPending
+    ? resumablePublishStage.includes(job.pausedFrom ?? '') ? job.pausedFrom! : 'await_publish_slot'
+    : hasUnapprovedDrafts && (job.state === 'circuit_open' || job.pausedFrom === 'awaiting_approval') ? 'awaiting_approval' : 'preflight'
+  if (job.state === 'awaiting_approval') {
+    delete job.activeProductId
+    await clearRuntimePayload()
+    await updateStatus('awaiting_approval', `${job.draftProductIds?.length ?? 0} prepared drafts ready for batch review`, job.completedToday)
+  }
+  delete job.pausedFrom
   job.consecutiveFailures = 0
   job.updatedAt = Date.now()
   await repository.saveJob(job)
-  await log('info', 'preflight', 'Automation resumed; preflight will run again')
+  await log('info', job.state, 'Automation resumed from the saved batch checkpoint')
   void runAdvance()
   return { resumed: true }
 }
@@ -263,6 +277,9 @@ async function resumeAutomation(): Promise<{ resumed: true }> {
 async function stopAutomation(): Promise<{ stopped: true }> {
   const job = await repository.loadJob()
   if (job) {
+    for (const productId of job.draftProductIds ?? []) await repository.deleteDraft(productId)
+    job.draftProductIds = []
+    job.approvedProductIds = []
     job.state = 'stopped'
     job.updatedAt = Date.now()
     await repository.saveJob(job)
@@ -274,32 +291,62 @@ async function stopAutomation(): Promise<{ stopped: true }> {
   return { stopped: true }
 }
 
-async function approveCurrentPin(): Promise<{ approved: true }> {
+async function getDraftPreview(productId: string): Promise<PinDraft> {
   const job = await requireJob()
   if (job.state !== 'awaiting_approval') {
-    throw new AutomationError('pin_not_awaiting_approval', 'No reviewed Pin is waiting for approval')
+    throw new AutomationError('batch_not_awaiting_approval', 'No Pin batch is waiting for review')
+  }
+  if (!(job.draftProductIds ?? []).includes(productId)) throw new AutomationError('draft_not_in_batch', 'This Pin is not in the current batch')
+  const draft = await repository.getDraft(productId)
+  if (!draft) throw new AutomationError('draft_missing', 'The requested Pin draft could not be recovered')
+  job.reviewedProductIds = [...new Set([...(job.reviewedProductIds ?? []), productId])]
+  await repository.saveJob(job)
+  return draft
+}
+
+async function approvePinBatch(productIds: string[]): Promise<{ approved: number }> {
+  const job = await requireJob()
+  if (job.state !== 'awaiting_approval') throw new AutomationError('batch_not_awaiting_approval', 'No Pin batch is waiting for approval')
+  if (productIds.length === 0 || new Set(productIds).size !== productIds.length) {
+    throw new AutomationError('batch_selection_invalid', 'Select each Pin to publish once; no Pin is selected by default')
+  }
+  if (productIds.some((id) => !(job.draftProductIds ?? []).includes(id) || !(job.reviewedProductIds ?? []).includes(id))) {
+    throw new AutomationError('batch_selection_invalid', 'Every selected Pin must first be opened for review')
   }
   const settings = await loadSettings()
   if (settings.developerDryRun) {
-    throw new AutomationError('dry_run_enabled', 'Turn off Developer dry run before approving a live publication')
+    throw new AutomationError('dry_run_enabled', 'Turn off Developer dry run before approving live publication')
   }
-  const payload = await getRuntimePayload()
-  if (!payload.activeProduct || !payload.generatedContent || !payload.posterDataUrl) {
-    throw new AutomationError('runtime_payload_missing', 'The reviewed Pin payload is incomplete')
+  const completedToday = await repository.countPublicationsForDay(localDayKey())
+  if (productIds.length > settings.dailyLimit - completedToday) {
+    throw new AutomationError('daily_limit_exceeded', 'Selected Pins exceed the remaining daily publication quota')
   }
-  job.state = 'publish_pinterest'
-  job.updatedAt = Date.now()
-  await repository.saveJob(job)
-  await log('info', 'publish_pinterest', `User explicitly approved ${payload.activeProduct.title}`)
+  for (const id of productIds) {
+    const draft = await repository.getDraft(id)
+    if (!draft?.product.affiliateUrl || !draft.posterDataUrl || draft.boardId !== settings.pinterestBoardId) {
+      throw new AutomationError('draft_invalid', 'A selected Pin is incomplete or its Board has changed; review the batch again')
+    }
+  }
+  const windowHours = randomInteger(settings.minimumWindowHours, settings.maximumWindowHours)
+  job.completedToday = completedToday
+  job.approvedProductIds = productIds
+  job.scheduledSlots = productIds.length === 1
+    ? [Date.now()]
+    : createDailySchedule({ startAt: Date.now(), windowHours, requestedCount: productIds.length, dailyCap: settings.dailyLimit, minSpacingMinutes: 20 })
+  job.nextSlotIndex = 0
+  await activateApprovedDraft(job, productIds[0])
+  await transition(job, 'await_publish_slot', `You selected ${productIds.length} reviewed Pins; publication is scheduled`)
+  await log('success', 'await_publish_slot', `Explicit batch approval recorded for ${productIds.length} individually selected Pins`)
   void runAdvance()
-  return { approved: true }
+  return { approved: productIds.length }
 }
 
 async function updatePinDraft(message: Extract<ExtensionMessage, { type: 'UPDATE_PIN_DRAFT' }>): Promise<{ updated: true }> {
   const job = await requireJob()
   if (job.state !== 'awaiting_approval') throw new AutomationError('pin_not_awaiting_approval', 'No Pin draft is waiting for review')
-  const payload = await getRuntimePayload()
-  if (!payload.generatedContent) throw new AutomationError('runtime_payload_missing', 'Pin draft content is missing')
+  if (!(job.reviewedProductIds ?? []).includes(message.productId)) throw new AutomationError('draft_not_reviewed', 'Open this Pin preview before editing it')
+  const draft = await repository.getDraft(message.productId)
+  if (!draft) throw new AutomationError('draft_missing', 'Pin draft content is missing')
   const title = message.title.trim()
   const description = message.description.trim()
   const altText = message.altText.trim()
@@ -309,17 +356,63 @@ async function updatePinDraft(message: Extract<ExtensionMessage, { type: 'UPDATE
   if ((description.match(/#affiliate/gi) ?? []).length !== 1) {
     throw new AutomationError('affiliate_disclosure_invalid', 'Description must contain #affiliate exactly once')
   }
-  await setRuntimePayload({
-    ...payload,
-    generatedContent: { ...payload.generatedContent, pinTitle: title, pinDescription: description, altText },
-  })
+  await repository.saveDraft({ ...draft, content: { ...draft.content, pinTitle: title, pinDescription: description, altText } })
   await log('info', 'awaiting_approval', 'User reviewed and updated the current Pin draft')
   return { updated: true }
 }
 
 async function resumeFromCheckpoint(): Promise<void> {
   const job = await repository.loadJob()
-  if (!job || isTerminalOrPaused(job.state)) return
+  if (!job) return
+  if (job.state === 'publish_pinterest' && job.publishOutcomeAmbiguous) {
+    const payload = await getRuntimePayload()
+    if (payload.pinterestPinId && payload.publicationConfirmed) {
+      job.state = 'verify_publication'
+      job.publishOutcomeAmbiguous = false
+      await repository.saveJob(job)
+    } else {
+      job.state = 'circuit_open'
+      await repository.saveJob(job)
+      await updateStatus('circuit_open', 'Pinterest Create Pin outcome is unknown; inspect the account before another run', job.completedToday)
+      return
+    }
+  }
+  if (!job.draftProductIds && ['await_publish_slot', 'fill_pinterest', 'awaiting_approval'].includes(job.state)) {
+    const payload = await getRuntimePayload()
+    job.draftProductIds = []
+    job.reviewedProductIds = []
+    job.approvedProductIds = []
+    job.scheduledSlots = []
+    job.nextSlotIndex = 0
+    job.completedToday = await repository.countPublicationsForDay(localDayKey())
+    if (payload.activeProduct?.affiliateUrl && payload.generatedContent && payload.posterDataUrl && payload.provider && payload.model) {
+      const settings = await loadSettings()
+      await repository.saveDraft({
+        id: payload.activeProduct.id,
+        product: payload.activeProduct,
+        content: payload.generatedContent,
+        posterDataUrl: payload.posterDataUrl,
+        provider: payload.provider,
+        model: payload.model,
+        boardId: settings.pinterestBoardId,
+        boardLabel: settings.boardName,
+        createdAt: Date.now(),
+      })
+      job.draftProductIds = [payload.activeProduct.id]
+      job.queueProductIds = job.queueProductIds.filter((id) => id !== payload.activeProduct!.id)
+      job.state = 'select_candidate'
+      await log('info', 'select_candidate', 'Migrated the existing unpublished Pin into the new batch review')
+    } else {
+      job.state = 'preflight'
+      job.queueProductIds = []
+      await log('info', 'preflight', 'Restarting discovery because the previous publication slot has no complete Pin draft')
+    }
+    delete job.activeProductId
+    job.updatedAt = Date.now()
+    await repository.saveJob(job)
+    await clearRuntimePayload()
+  }
+  if (isTerminalOrPaused(job.state)) return
   if (job.state === 'await_publish_slot') {
     const slot = job.scheduledSlots[job.nextSlotIndex ?? 0]
     if (slot && slot > Date.now()) {
@@ -424,12 +517,17 @@ async function discoverProducts(job: JobSnapshot): Promise<void> {
     type: 'SHOPEE_DISCOVER',
     maxPages: settings.discoveryMaxPages,
     maxProducts: Math.max(1, settings.dailyLimit - job.completedToday),
+    affiliateTags: settings.affiliateTags,
   }))
   const diagnostics = result.diagnostics
   if (diagnostics) {
     await log('info', 'discover_products', `Scanned ${result.pagesScanned} page(s): ${diagnostics.productsRead} products read, ${diagnostics.productsMatchingFilters} passed filters, ${diagnostics.affiliateLinkFailures} affiliate links failed`)
   }
   if (result.candidates.length === 0) {
+    if ((job.draftProductIds?.length ?? 0) > 0) {
+      await transition(job, 'awaiting_approval', `${job.draftProductIds!.length} prepared drafts are ready for batch review`)
+      return
+    }
     const message = !diagnostics || diagnostics.productsRead === 0
       ? `Tidak ada kartu produk yang terbaca dari ${result.pagesScanned} halaman. Muat ulang halaman Shopee Affiliate lalu coba kembali.`
       : diagnostics.productsMatchingFilters === 0
@@ -451,14 +549,24 @@ async function selectCandidate(job: JobSnapshot): Promise<void> {
     return
   }
 
+  const draftIds = job.draftProductIds ?? []
+  if (draftIds.length >= settings.dailyLimit - currentCount) {
+    await transition(job, 'awaiting_approval', `${draftIds.length} Pin drafts ready for individual selection and one batch approval`)
+    return
+  }
+
   let selectedId: string | undefined
   for (const productId of job.queueProductIds) {
-    if (!await repository.wasPublishedWithin(productId, 30)) {
+    if (!draftIds.includes(productId) && !await repository.wasPublishedWithin(productId, 30)) {
       selectedId = productId
       break
     }
   }
   if (!selectedId) {
+    if (draftIds.length > 0) {
+      await transition(job, 'awaiting_approval', `${draftIds.length} Pin drafts ready for batch review`)
+      return
+    }
     job.state = 'stopped'
     job.updatedAt = Date.now()
     await repository.saveJob(job)
@@ -498,9 +606,11 @@ async function generateAffiliateLink(job: JobSnapshot): Promise<void> {
   }
   await updateStatus('generate_affiliate_link', 'Generating the Shopee affiliate link', job.completedToday, product.title)
   const affiliateTab = await ensureTab('affiliate.shopee.co.id', AFFILIATE_URL)
+  const settings = await loadSettings()
   const result = await withSingleRetry(() => sendToTab<{ affiliateUrl: string }>(affiliateTab, {
     type: 'SHOPEE_GENERATE_LINK',
     productId: product.id,
+    affiliateTags: settings.affiliateTags,
   }))
   if (!result.affiliateUrl) throw new AutomationError('affiliate_link_missing', 'Shopee did not return an affiliate link')
   const updated = { ...product, affiliateUrl: result.affiliateUrl }
@@ -546,11 +656,27 @@ async function renderPoster(job: JobSnapshot): Promise<void> {
     visualTone: content.layoutDirection.visualTone,
     accentPreference: content.layoutDirection.accentPreference,
   })
-  await setRuntimePayload({ ...payload, posterDataUrl: result.dataUrl })
-  await transition(job, 'await_publish_slot', 'Poster is ready')
+  const settings = await loadSettings()
+  if (!product.affiliateUrl || !payload.provider || !payload.model) throw new AutomationError('draft_incomplete', 'Affiliate link or provider metadata is missing')
+  await repository.saveDraft({
+    id: product.id, product, content, posterDataUrl: result.dataUrl,
+    provider: payload.provider, model: payload.model,
+    boardId: settings.pinterestBoardId, boardLabel: settings.boardName, createdAt: Date.now(),
+  })
+  job.draftProductIds = [...new Set([...(job.draftProductIds ?? []), product.id])]
+  job.queueProductIds = job.queueProductIds.filter((id) => id !== product.id)
+  delete job.activeProductId
+  await transition(job, 'select_candidate', `Draft ${job.draftProductIds.length} prepared; collecting the batch`)
+  await clearRuntimePayload()
 }
 
 async function awaitPublishSlot(job: JobSnapshot): Promise<boolean> {
+  const approvedId = job.approvedProductIds?.[job.nextSlotIndex ?? 0]
+  if (!approvedId) {
+    await transition(job, 'daily_limit_reached', 'Approved batch has no remaining Pins')
+    return true
+  }
+  if (job.activeProductId !== approvedId || !(await getRuntimePayload()).activeProduct) await activateApprovedDraft(job, approvedId)
   const slot = job.scheduledSlots[job.nextSlotIndex ?? 0]
   if (!slot) {
     await transition(job, 'daily_limit_reached', 'No publication slots remain')
@@ -566,14 +692,21 @@ async function awaitPublishSlot(job: JobSnapshot): Promise<boolean> {
 }
 
 async function fillPinterest(job: JobSnapshot): Promise<void> {
-  const settings = await loadSettings()
   const payload = await getRuntimePayload()
   if (!payload.activeProduct?.affiliateUrl || !payload.generatedContent || !payload.posterDataUrl) {
     throw new AutomationError('runtime_payload_missing', 'Pinterest publication payload is incomplete')
   }
-  if (!/^\d+$/.test(settings.pinterestBoardId)) throw new AutomationError('pinterest_board_id_required', 'Select a valid Pinterest Board ID')
-  await updateStatus('fill_pinterest', 'Draft ready; no Pinterest API write has occurred', job.completedToday, payload.activeProduct.title)
-  await transition(job, 'awaiting_approval', 'Review the image, copy, disclosure, link, Board, and schedule; then explicitly approve this Pin')
+  const approvedId = job.approvedProductIds?.[job.nextSlotIndex ?? 0]
+  if (payload.activeProduct.id !== approvedId) throw new AutomationError('draft_not_approved', 'The current Pin was not selected during batch approval')
+  const draft = await repository.getDraft(approvedId)
+  if (!draft || !/^\d+$/.test(draft.boardId)) throw new AutomationError('draft_missing', 'Approved Pin draft or Board is missing')
+  const settings = await loadSettings()
+  if (await repository.countPublicationsForDay(localDayKey()) >= settings.dailyLimit) {
+    await transition(job, 'daily_limit_reached', 'Daily publication limit reached before the next Pin')
+    return
+  }
+  await updateStatus('fill_pinterest', 'Approved draft validated for Pinterest API', job.completedToday, payload.activeProduct.title)
+  await transition(job, 'publish_pinterest', 'Publishing a Pin explicitly selected in the reviewed batch')
 }
 
 async function publishPinterest(job: JobSnapshot): Promise<void> {
@@ -589,19 +722,40 @@ async function publishPinterest(job: JobSnapshot): Promise<void> {
   if (!payload.activeProduct?.affiliateUrl || !payload.generatedContent || !payload.posterDataUrl) {
     throw new AutomationError('runtime_payload_missing', 'Approved Pinterest API payload is incomplete')
   }
+  const approvedId = job.approvedProductIds?.[job.nextSlotIndex ?? 0]
+  if (payload.activeProduct.id !== approvedId) throw new AutomationError('draft_not_approved', 'This Pin was not selected in the approved batch')
+  const draft = await repository.getDraft(approvedId)
+  if (!draft || !/^\d+$/.test(draft.boardId)) throw new AutomationError('draft_missing', 'Approved Pin draft or Board is missing')
+  if (payload.pinterestPinId && payload.publicationConfirmed) {
+    job.publishOutcomeAmbiguous = false
+    await transition(job, 'verify_publication', 'Previously acknowledged Pin is ready for verification')
+    return
+  }
   await updateStatus('publish_pinterest', 'Creating the explicitly approved Pin through Pinterest API v5', job.completedToday, payload.activeProduct.title)
   const pinterest = await createPinterestClient(settings)
-  const result = await pinterest.createPin({
-    boardId: settings.pinterestBoardId,
-    title: payload.generatedContent.pinTitle,
-    description: payload.generatedContent.pinDescription,
-    altText: payload.generatedContent.altText,
-    link: payload.activeProduct.affiliateUrl,
-    posterDataUrl: payload.posterDataUrl,
-  })
+  job.publishOutcomeAmbiguous = true
+  await repository.saveJob(job)
+  let result
+  try {
+    result = await pinterest.createPin({
+      boardId: draft.boardId,
+      title: payload.generatedContent.pinTitle,
+      description: payload.generatedContent.pinDescription,
+      altText: payload.generatedContent.altText,
+      link: payload.activeProduct.affiliateUrl,
+      posterDataUrl: payload.posterDataUrl,
+    })
+  } catch (error) {
+    if (error instanceof PinterestApiError && (/^pinterest_http_(?:400|401|403|404|422)$/.test(error.code) || error.code === 'poster_data_invalid')) {
+      job.publishOutcomeAmbiguous = false
+      await repository.saveJob(job)
+    }
+    throw error
+  }
   if (!/^\d+$/.test(result.id)) throw new AutomationError('pinterest_pin_id_missing', 'Pinterest API returned no valid Pin ID')
   const pinUrl = `https://www.pinterest.com/pin/${result.id}/`
   await setRuntimePayload({ ...payload, pinterestPinId: result.id, pinUrl, publicationConfirmed: true })
+  job.publishOutcomeAmbiguous = false
   await transition(job, 'verify_publication', 'Pinterest API acknowledged the Create Pin request')
 }
 
@@ -619,11 +773,11 @@ async function verifyPublication(job: JobSnapshot): Promise<void> {
 
 async function commitResult(job: JobSnapshot): Promise<void> {
   const payload = await getRuntimePayload()
-  if (!payload.activeProduct?.affiliateUrl || !payload.generatedContent || !payload.posterDataUrl || !payload.pinUrl || !payload.provider || !payload.model) {
+  if (!payload.activeProduct?.affiliateUrl || !payload.generatedContent || !payload.posterDataUrl || !payload.pinUrl || !payload.pinterestPinId || !payload.provider || !payload.model) {
     throw new AutomationError('runtime_payload_missing', 'Verified publication metadata is incomplete')
   }
   const record: PublicationRecord = {
-    id: crypto.randomUUID(),
+    id: payload.pinterestPinId,
     productId: payload.activeProduct.id,
     productTitle: payload.activeProduct.title,
     productUrl: payload.activeProduct.canonicalUrl,
@@ -635,8 +789,8 @@ async function commitResult(job: JobSnapshot): Promise<void> {
     posterFingerprint: await fingerprint(payload.posterDataUrl),
   }
   await repository.recordPublication(record)
-  job.completedToday += 1
-  job.nextSlotIndex = (job.nextSlotIndex ?? 0) + 1
+  job.completedToday = await repository.countPublicationsForDay(localDayKey())
+  job.nextSlotIndex = Math.max(0, (job.approvedProductIds ?? []).indexOf(payload.activeProduct.id)) + 1
   job.consecutiveFailures = 0
   await transition(job, 'cleanup', 'Publication committed')
   await log('success', 'commit_result', `Published ${payload.activeProduct.title}`)
@@ -644,14 +798,27 @@ async function commitResult(job: JobSnapshot): Promise<void> {
 
 async function cleanupProduct(job: JobSnapshot): Promise<void> {
   const activeId = job.activeProductId
-  if (activeId) job.queueProductIds = job.queueProductIds.filter((productId) => productId !== activeId)
+  if (activeId) {
+    await repository.deleteDraft(activeId)
+    job.draftProductIds = (job.draftProductIds ?? []).filter((id) => id !== activeId)
+  }
   delete job.activeProductId
   await clearRuntimePayload()
   const settings = await loadSettings()
-  if (job.completedToday >= settings.dailyLimit) {
-    await transition(job, 'daily_limit_reached', 'Daily limit reached')
+  const nextId = job.approvedProductIds?.[job.nextSlotIndex ?? 0]
+  if (nextId && job.completedToday < settings.dailyLimit) {
+    await activateApprovedDraft(job, nextId)
+    await transition(job, 'await_publish_slot', 'Waiting for the next approved Pin slot')
   } else {
-    await transition(job, 'select_candidate', 'Temporary product assets removed')
+    for (const id of job.draftProductIds ?? []) await repository.deleteDraft(id)
+    job.draftProductIds = []
+    job.approvedProductIds = []
+    job.reviewedProductIds = []
+    if (job.completedToday >= settings.dailyLimit) {
+      await transition(job, 'daily_limit_reached', 'Daily limit reached')
+    } else {
+      await transition(job, 'stopped', 'Approved batch finished; no more selected Pins remain')
+    }
   }
 }
 
@@ -675,6 +842,28 @@ async function handleWorkflowError(error: unknown): Promise<void> {
     job.updatedAt = Date.now()
     await repository.saveJob(job)
     await updateStatus('stopped', normalized.message, job.completedToday, undefined, undefined, normalized.message)
+    return
+  }
+
+  if ((job.draftProductIds?.length ?? 0) > 0 && (job.approvedProductIds?.length ?? 0) === 0
+    && ['discover_products', 'select_candidate'].includes(job.state)) {
+    job.state = 'awaiting_approval'
+    job.updatedAt = Date.now()
+    await repository.saveJob(job)
+    await updateStatus('awaiting_approval', `${job.draftProductIds!.length} prepared drafts ready despite a source error`, job.completedToday)
+    return
+  }
+
+  if ((job.approvedProductIds?.length ?? 0) > 0) {
+    job.pausedFrom = job.state
+    job.publishOutcomeAmbiguous = Boolean(job.publishOutcomeAmbiguous)
+    job.state = 'paused'
+    job.updatedAt = Date.now()
+    await repository.saveJob(job)
+    await updateStatus('paused', job.publishOutcomeAmbiguous
+      ? 'Pinterest response was ambiguous; check your Pinterest account before any retry'
+      : `${normalized.code}: ${normalized.message}`, job.completedToday, undefined, undefined, normalized.message)
+    await notifySafetyStop(normalized.message)
     return
   }
 
@@ -752,6 +941,20 @@ async function requireActiveProduct(job: JobSnapshot): Promise<ProductCandidate>
   const product = await repository.getProduct(job.activeProductId)
   if (!product) throw new AutomationError('active_product_missing', 'The active product could not be recovered')
   return product
+}
+
+async function activateApprovedDraft(job: JobSnapshot, productId: string): Promise<void> {
+  const draft = await repository.getDraft(productId)
+  if (!draft) throw new AutomationError('draft_missing', 'The approved Pin draft could not be recovered')
+  job.activeProductId = productId
+  await setRuntimePayload({
+    activeProduct: draft.product,
+    generatedContent: draft.content,
+    posterDataUrl: draft.posterDataUrl,
+    provider: draft.provider,
+    model: draft.model,
+  })
+  await repository.saveJob(job)
 }
 
 async function generateWithFallback(

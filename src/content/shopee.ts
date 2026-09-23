@@ -8,6 +8,7 @@ import {
 import { rankProducts } from '../core/eligibility'
 import type { ExtensionMessage, MessageResponse } from '../core/messages'
 import { discoverShopeePages, type ShopeeDiscoveryDiagnostics } from '../adapters/shopee-pagination'
+import { applyShopeeAffiliateTags } from '../adapters/shopee-affiliate-tags'
 
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !message.type.startsWith('SHOPEE_')) return
@@ -36,14 +37,14 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
         document,
         message.maxPages,
         message.maxProducts,
-        (candidates, limit) => enrichAffiliateLinks(candidates, limit, diagnostics),
+        (candidates, limit) => enrichAffiliateLinks(candidates, limit, diagnostics, message.affiliateTags ?? []),
       )
       return { candidates: rankProducts(discovery.candidates), pagesScanned: discovery.pagesScanned, diagnostics }
     }
     case 'SHOPEE_EXTRACT':
       return { product: extractShopeeProductDetail(document, message.candidate) }
     case 'SHOPEE_GENERATE_LINK':
-      return { affiliateUrl: await generateAffiliateLink(message.productId) }
+      return { affiliateUrl: await generateAffiliateLink(message.productId, message.affiliateTags ?? []) }
     default:
       throw codedError('unsupported_message', `Unsupported Shopee message: ${message.type}`)
   }
@@ -53,6 +54,7 @@ async function enrichAffiliateLinks(
   candidates: ReturnType<typeof extractShopeeCandidates>,
   limit: number,
   diagnostics: ShopeeDiscoveryDiagnostics,
+  affiliateTags: string[],
 ): Promise<ReturnType<typeof extractShopeeCandidates>> {
   const usable = rankProducts(candidates)
   diagnostics.productsRead += candidates.length
@@ -62,7 +64,7 @@ async function enrichAffiliateLinks(
   for (const candidate of usable) {
     if (enriched.length >= limit) break
     try {
-      const affiliateUrl = await generateAffiliateLink(candidate.id)
+      const affiliateUrl = await generateAffiliateLink(candidate.id, affiliateTags)
       enriched.push({ ...candidate, affiliateUrl })
     } catch (error) {
       diagnostics.affiliateLinkFailures += 1
@@ -73,11 +75,11 @@ async function enrichAffiliateLinks(
   return enriched
 }
 
-async function generateAffiliateLink(productId: string): Promise<string> {
+async function generateAffiliateLink(productId: string, affiliateTags: string[]): Promise<string> {
   const card = findShopeeProductCard(document, productId)
   if (!card) throw codedError('product_card_missing', 'Shopee affiliate product card was not found')
   const existing = extractAffiliateLink(card)
-  if (existing) return existing
+  if (existing && affiliateTags.length === 0) return existing
 
   const previousLinks = new Set(extractAffiliateLinks(document))
   const action = Array.from(card.querySelectorAll<HTMLElement>('button, [role="button"]'))
@@ -86,14 +88,29 @@ async function generateAffiliateLink(productId: string): Promise<string> {
   action.click()
 
   try {
+    if (affiliateTags.length > 0) {
+      const dialog = await waitForDialog(5_000)
+      await applyShopeeAffiliateTags(dialog, affiliateTags)
+    }
     return await waitForValue(
-      () => extractAffiliateLinks(document).find((link) => !previousLinks.has(link)) ?? extractAffiliateLink(card),
+      () => extractAffiliateLinks(document).find((link) => !previousLinks.has(link))
+        ?? (affiliateTags.length === 0 ? extractAffiliateLink(card) : undefined),
       12_000,
       'affiliate_link_missing',
     )
   } finally {
     closeAffiliateDialog()
   }
+}
+
+async function waitForDialog(timeout: number): Promise<HTMLElement> {
+  const started = Date.now()
+  while (Date.now() - started < timeout) {
+    const dialog = document.querySelector<HTMLElement>('.ant-modal, [role="dialog"]')
+    if (dialog) return dialog
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw codedError('affiliate_tag_controls_missing', 'Formulir tag Shopee tidak muncul setelah Buat Link')
 }
 
 function closeAffiliateDialog(): void {

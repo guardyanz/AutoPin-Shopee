@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type AutomationSettings } from '../core/settings'
+import { DEFAULT_SETTINGS, validateAffiliateTags, type AutomationSettings } from '../core/settings'
 
 const SETTINGS_KEY = 'automationSettings'
 
@@ -28,9 +28,17 @@ export async function saveSettings(settings: AutomationSettings): Promise<Automa
 }
 
 function enforceComplianceDefaults(settings: AutomationSettings): AutomationSettings {
+  const affiliateTags = Array.isArray(settings.affiliateTags)
+    ? settings.affiliateTags.map((tag) => String(tag).trim())
+    : []
+  const tagErrors = validateAffiliateTags(affiliateTags)
+  if (tagErrors.length > 0) {
+    throw new Error('Shopee tag harus unik, maksimal 5, dan hanya berisi huruf atau angka tanpa spasi.')
+  }
   return {
     ...settings,
     discoveryMaxPages: clampInteger(settings.discoveryMaxPages, 1, 10, 3),
+    affiliateTags,
     pinterestEnvironment: settings.pinterestEnvironment === 'production' ? 'production' : 'sandbox',
     pinterestOAuthWorkerUrl: String(settings.pinterestOAuthWorkerUrl ?? '').trim().replace(/\/$/, ''),
     pinterestAccessToken: String(settings.pinterestAccessToken ?? '').trim(),

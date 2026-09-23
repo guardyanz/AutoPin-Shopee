@@ -20,6 +20,7 @@ export interface AutomationSettings {
   researchKeywords: string[]
   researchUpdatedAt: number | null
   discoveryMaxPages: number
+  affiliateTags: string[]
   pinterestEnvironment: PinterestApiEnvironment
   pinterestOAuthWorkerUrl: string
   pinterestAccessToken: string
@@ -56,6 +57,7 @@ export const DEFAULT_SETTINGS: AutomationSettings = {
   researchKeywords: [],
   researchUpdatedAt: null,
   discoveryMaxPages: 3,
+  affiliateTags: [],
   pinterestEnvironment: 'sandbox',
   pinterestOAuthWorkerUrl: 'https://autopin-shopee-oauth.akurindowijayapwt.workers.dev',
   pinterestAccessToken: '',
@@ -72,5 +74,13 @@ export function validateSettingsForStart(settings: AutomationSettings): string[]
   if (!active.primaryModel.trim()) errors.push('primary_model_required')
   if (!settings.pinterestAccessToken.trim()) errors.push('pinterest_token_required')
   if (!/^\d+$/.test(settings.pinterestBoardId.trim())) errors.push('pinterest_board_id_required')
+  errors.push(...validateAffiliateTags(settings.affiliateTags))
   return errors
+}
+
+export function validateAffiliateTags(tags: unknown): string[] {
+  if (!Array.isArray(tags) || tags.length > 5) return ['affiliate_tags_limit']
+  if (tags.some((tag) => typeof tag !== 'string' || !/^[A-Za-z0-9]+$/.test(tag))) return ['affiliate_tag_invalid']
+  if (new Set(tags.map((tag: string) => tag.toLowerCase())).size !== tags.length) return ['affiliate_tag_duplicate']
+  return []
 }

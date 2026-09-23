@@ -5,12 +5,13 @@ This document is suitable as reviewer support material and as the implementation
 ## Data flow
 
 ```text
-Owner selects Shopee Affiliate product
+Owner selects Shopee Affiliate products
   → extension extracts authorised product metadata locally
+  → optional tracking tags are applied through Shopee's own affiliate-link form
   → optional AI provider receives selected product text to draft copy
-  → extension renders original poster locally
-  → owner reviews image, copy, link, Board, and schedule
-  → owner explicitly approves that Pin
+  → extension renders original posters locally and stores draft batch locally
+  → owner opens every candidate preview and selects each Pin to publish
+  → owner confirms the selected batch once; unselected Pins are excluded
   → OAuth access token authorises Pinterest API v5 request
   → Pinterest creates Pin on owner's selected Board
   → app fetches the resulting Pin only to verify the requested action
@@ -24,16 +25,16 @@ Owner selects Shopee Affiliate product
 - Least-privilege scope set: Boards and Pins read/write only.
 - No Pinterest scraping or DOM automation in the API-approved production path.
 - No automated engagement actions.
-- No autonomous bulk action: each draft requires an owner approval event.
+- No autonomous bulk action: each Pin must be previewed and individually selected before one batch confirmation.
 - No Pinterest API data used in AI prompts, model training, benchmarking, or third-party advertising.
 - No cross-user data combination and no sale of data.
 - API responses are requested when needed instead of building a Pinterest-data warehouse.
-- Local publication fingerprints prevent accidental duplicate creation.
-- Ambiguous Create Pin outcomes are verified and never blindly retried.
+- Local product publication history and Pinterest Pin IDs help prevent accidental duplicate creation.
+- If a Create Pin response is ambiguous and no Pin ID was saved, publication pauses for manual account inspection; it is never blindly retried.
 
 ## Content responsibility
 
-The owner must have the rights and affiliate authorisation needed for every source product and image. The owner reviews every title, description, alt text, affiliate destination, disclosure, Board, and scheduled time. The app includes `#affiliate` once in the description and does not claim endorsement by Pinterest or Shopee.
+The owner must have the rights and affiliate authorisation needed for every source product and image. The owner reviews every title, description, alt text, affiliate destination, disclosure, Board, and scheduling rules before selecting a Pin. The app includes `#affiliate` once in the description and does not claim endorsement by Pinterest or Shopee.
 
 ## Incident response
 

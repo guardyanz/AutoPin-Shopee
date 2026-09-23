@@ -2,7 +2,7 @@ import { openDB, type DBSchema } from 'idb'
 
 import { localDayKey } from '../core/scheduler'
 import type { ProductCandidate } from '../core/types'
-import type { JobSnapshot, PublicationRecord } from './types'
+import type { JobSnapshot, PinDraft, PublicationRecord } from './types'
 
 interface AutomationDatabase extends DBSchema {
   jobs: {
@@ -18,6 +18,10 @@ interface AutomationDatabase extends DBSchema {
     key: string
     value: ProductCandidate
   }
+  drafts: {
+    key: string
+    value: PinDraft
+  }
 }
 
 export interface AutomationRepository {
@@ -29,6 +33,9 @@ export interface AutomationRepository {
   listRecentPublications(limit?: number): Promise<PublicationRecord[]>
   saveProducts(products: ProductCandidate[]): Promise<void>
   getProduct(productId: string): Promise<ProductCandidate | undefined>
+  saveDraft(draft: PinDraft): Promise<void>
+  getDraft(productId: string): Promise<PinDraft | undefined>
+  deleteDraft(productId: string): Promise<void>
 }
 
 export function createAutomationRepository(databaseName = 'autopin-shopee'): AutomationRepository {
@@ -95,11 +102,27 @@ export function createAutomationRepository(databaseName = 'autopin-shopee'): Aut
     getProduct(productId) {
       return withDatabase((database) => database.get('products', productId))
     },
+
+    saveDraft(draft) {
+      return withDatabase(async (database) => {
+        await database.put('drafts', draft)
+      })
+    },
+
+    getDraft(productId) {
+      return withDatabase((database) => database.get('drafts', productId))
+    },
+
+    deleteDraft(productId) {
+      return withDatabase(async (database) => {
+        await database.delete('drafts', productId)
+      })
+    },
   }
 }
 
 function openDatabase(databaseName: string) {
-  return openDB<AutomationDatabase>(databaseName, 2, {
+  return openDB<AutomationDatabase>(databaseName, 3, {
     upgrade(database) {
       if (!database.objectStoreNames.contains('jobs')) {
         database.createObjectStore('jobs', { keyPath: 'id' })
@@ -110,6 +133,9 @@ function openDatabase(databaseName: string) {
       }
       if (!database.objectStoreNames.contains('products')) {
         database.createObjectStore('products', { keyPath: 'id' })
+      }
+      if (!database.objectStoreNames.contains('drafts')) {
+        database.createObjectStore('drafts', { keyPath: 'id' })
       }
     },
   })

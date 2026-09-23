@@ -7,10 +7,10 @@ Target duration: **3–5 minutes**. Record one continuous take at readable resol
 ## Pre-recording setup
 
 - Use the Trial/Sandbox environment first, then the environment requested by the upgrade form.
-- Have one authorised Shopee Affiliate product ready.
+- Have at least two authorised Shopee Affiliate products ready to show batch selection.
 - Have one test Board ready, or demonstrate owner-requested Board creation.
 - Enable the browser network panel only if it can be shown without credentials.
-- Keep **Developer dry run** on until the final approved action.
+- Use **Developer dry run** during preparation; switch it off before the final live batch confirmation.
 - Ensure the app shows a mandatory review/approval state.
 
 ## Narration and actions
@@ -35,19 +35,19 @@ Say:
 
 ### 1:20–2:20 — Create and review a draft
 
-1. Select one Shopee Affiliate product.
-2. Generate the affiliate link and original 1000 by 1500 creative.
-3. Show title, description, `#affiliate`, alt text, destination link, Board, and schedule.
+1. Prepare at least two Shopee Affiliate drafts.
+2. Show the generated affiliate links and original 1000 by 1500 creative.
+3. Open the preview for each draft and show title, description, `#affiliate`, alt text, destination link, and Board.
 4. Change one field to demonstrate owner control.
-5. Show that Publish is unavailable until the review confirmation is checked.
+5. Show that no Pin is selected automatically; individually check the Pins to publish.
 
 Say:
 
-> The user considers this individual Pin, confirms rights and disclosure, chooses the Board and schedule, and makes the final publish decision. The app does not automatically approve a batch.
+> The user considers each Pin, confirms rights and disclosure, selects each intended publication, and makes one final decision for that selected batch. Unselected drafts cannot be posted.
 
 ### 2:20–3:20 — Live API action
 
-1. Click **Approve and publish** for this one Pin.
+1. Click **Approve selected Pins** once for the individually selected drafts.
 2. Show the app's request status without exposing the bearer token.
 3. Show the successful Pin ID/URL returned by Pinterest.
 4. Open the created Pin on Pinterest and show the image, copy, Board, and affiliate destination.
@@ -71,7 +71,7 @@ Say:
 - [ ] Official Pinterest OAuth consent screen is clearly visible.
 - [ ] No password, cookie, app secret, access token, or refresh token is visible.
 - [ ] Live API-created Pin is shown—not a wireframe or browser form automation.
-- [ ] The owner approves one specific Pin.
+- [ ] The owner opens and individually selects every Pin in the approved batch; no draft is preselected.
 - [ ] Privacy Policy URL is publicly accessible.
 - [ ] Disconnect/deletion path is shown.
 - [ ] The narration and app behaviour match the submitted form exactly.

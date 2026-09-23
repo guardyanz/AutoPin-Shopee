@@ -24,31 +24,31 @@ import type { ActivityEntry, RuntimeStatus } from '../core/runtime'
 import type { AutomationSettings } from '../core/settings'
 import type { ProviderId, ProviderModel } from '../core/types'
 import type { PinterestBoard } from '../providers/pinterest-api'
-import type { PublicationRecord } from '../storage/types'
+import type { PinDraft, PublicationRecord } from '../storage/types'
 
 interface DashboardData {
   status: RuntimeStatus
   activity: ActivityEntry[]
   publications: PublicationRecord[]
-  review: PinReviewData | null
+  reviews: PinReviewData[]
 }
 
 interface PinReviewData {
+  productId: string
   productTitle: string
-  posterDataUrl: string
   title: string
-  description: string
-  altText: string
   destinationUrl: string
   boardId: string
   boardLabel: string
+  reviewed: boolean
 }
 
 const iconSet = { Download, Eye, EyeOff, Gauge, Link2, Logs, Pause, Play, PlugZap, RefreshCw, RotateCcw, Save, Settings2, ShieldCheck, Square, Unlink, Workflow }
 let settings: AutomationSettings | null = null
 let dashboard: DashboardData | null = null
 let toastTimer: number | undefined
-let renderedReviewKey = ''
+let activeReviewId = ''
+const selectedProductIds = new Set<string>()
 let pinterestBoards: PinterestBoard[] = []
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -80,7 +80,7 @@ function bindControls(): void {
   element<HTMLButtonElement>('start-button').addEventListener('click', () => void runCommand({ type: 'START_AUTOMATION' }, 'Automation started'))
   element<HTMLButtonElement>('pause-button').addEventListener('click', () => void runCommand({ type: 'PAUSE_AUTOMATION' }, 'Automation paused'))
   element<HTMLButtonElement>('resume-button').addEventListener('click', () => void runCommand({ type: 'RESUME_AUTOMATION' }, 'Automation resumed'))
-  element<HTMLButtonElement>('approve-button').addEventListener('click', () => void approveCurrentPin())
+  element<HTMLButtonElement>('approve-button').addEventListener('click', () => void approvePinBatch())
   element<HTMLButtonElement>('save-review').addEventListener('click', () => void savePinReview(true))
   element<HTMLButtonElement>('stop-button').addEventListener('click', () => void runCommand({ type: 'STOP_AUTOMATION' }, 'Automation stopped'))
 }
@@ -135,40 +135,81 @@ function renderDashboard(data: DashboardData): void {
   else if (!['idle', 'stopped', 'daily_limit_reached'].includes(status.state)) dot.classList.add('is-active')
 
   renderPipeline(status.state)
-  renderPinReview(data.review)
+  renderBatchReview(data.reviews)
   renderPublications(data.publications)
   renderActivity(data.activity)
   updateControlStates(status.state)
 }
 
-function renderPinReview(review: PinReviewData | null): void {
+function renderBatchReview(reviews: PinReviewData[]): void {
   const panel = element<HTMLElement>('review-panel')
-  panel.hidden = !review
-  if (!review) {
-    renderedReviewKey = ''
+  panel.hidden = reviews.length === 0
+  if (reviews.length === 0) {
+    activeReviewId = ''
+    selectedProductIds.clear()
+    element<HTMLElement>('draft-preview').hidden = true
     return
   }
-  const key = `${review.productTitle}:${review.posterDataUrl.slice(-48)}`
-  if (key !== renderedReviewKey) {
-    element<HTMLImageElement>('review-poster').src = review.posterDataUrl
-    element('review-product').textContent = review.productTitle
-    element<HTMLInputElement>('review-pin-title').value = review.title
-    element<HTMLTextAreaElement>('review-description').value = review.description
-    element<HTMLTextAreaElement>('review-alt-text').value = review.altText
+  const available = new Set(reviews.map((review) => review.productId))
+  for (const id of selectedProductIds) if (!available.has(id)) selectedProductIds.delete(id)
+  for (const review of reviews) if (!review.reviewed) selectedProductIds.delete(review.productId)
+  const list = element<HTMLUListElement>('batch-list')
+  list.replaceChildren(...reviews.map((review) => {
+    const item = document.createElement('li')
+    const preview = document.createElement('button')
+    preview.type = 'button'
+    preview.className = 'batch-preview'
+    preview.setAttribute('aria-label', `Preview ${review.productTitle}`)
+    const title = document.createElement('strong')
+    title.textContent = review.productTitle
+    const status = document.createElement('small')
+    status.textContent = review.reviewed ? 'Sudah dibuka · pilih jika setuju' : 'Buka preview terlebih dahulu'
+    preview.append(title, status)
+    preview.addEventListener('click', () => void openDraftPreview(review.productId))
+    const checkbox = document.createElement('input')
+    checkbox.type = 'checkbox'
+    checkbox.disabled = !review.reviewed
+    checkbox.checked = selectedProductIds.has(review.productId)
+    checkbox.setAttribute('aria-label', `Pilih Pin ${review.productTitle} untuk diterbitkan`)
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) selectedProductIds.add(review.productId)
+      else selectedProductIds.delete(review.productId)
+      updateApprovalButton()
+    })
+    item.append(preview, checkbox)
+    return item
+  }))
+  if (activeReviewId && !available.has(activeReviewId)) {
+    activeReviewId = ''
+    element<HTMLElement>('draft-preview').hidden = true
+  }
+  updateApprovalButton()
+}
+
+async function openDraftPreview(productId: string): Promise<void> {
+  try {
+    const draft = await sendMessage<PinDraft>({ type: 'GET_DRAFT_PREVIEW', productId })
+    activeReviewId = productId
+    element<HTMLElement>('draft-preview').hidden = false
+    element<HTMLImageElement>('review-poster').src = draft.posterDataUrl
+    element('review-product').textContent = draft.product.title
+    element<HTMLInputElement>('review-pin-title').value = draft.content.pinTitle
+    element<HTMLTextAreaElement>('review-description').value = draft.content.pinDescription
+    element<HTMLTextAreaElement>('review-alt-text').value = draft.content.altText
     const destination = element<HTMLAnchorElement>('review-destination')
-    destination.href = review.destinationUrl
-    destination.textContent = review.destinationUrl
-    element('review-board').textContent = review.boardLabel
-      ? `${review.boardLabel} · ${review.boardId}`
-      : review.boardId
-    renderedReviewKey = key
+    destination.href = draft.product.affiliateUrl ?? ''
+    destination.textContent = draft.product.affiliateUrl ?? ''
+    element('review-board').textContent = draft.boardLabel ? `${draft.boardLabel} · ${draft.boardId}` : draft.boardId
+    await refreshDashboard(false)
+  } catch (error) {
+    showToast(messageFromError(error), true)
   }
 }
 
 function renderPipeline(state: string): void {
   const source = ['preflight', 'research_due_check', 'discover_products', 'select_candidate', 'extract_product', 'generate_affiliate_link']
-  const creative = ['generate_copy', 'render_poster', 'await_publish_slot']
-  const publish = ['fill_pinterest', 'awaiting_approval', 'publish_pinterest', 'verify_publication', 'commit_result', 'cleanup']
+  const creative = ['generate_copy', 'render_poster']
+  const publish = ['awaiting_approval', 'await_publish_slot', 'fill_pinterest', 'publish_pinterest', 'verify_publication', 'commit_result', 'cleanup']
   const group = source.includes(state) ? 'source' : creative.includes(state) ? 'creative' : publish.includes(state) ? 'publish' : ''
   const order = ['source', 'creative', 'publish']
   document.querySelectorAll<HTMLElement>('[data-stage-group]').forEach((item) => {
@@ -182,7 +223,13 @@ function renderPublications(publications: PublicationRecord[]): void {
   const list = element<HTMLUListElement>('publication-list')
   list.replaceChildren(...publications.slice(0, 5).map((publication) => {
     const item = document.createElement('li')
-    const content = document.createElement('div')
+    const content = document.createElement(/^\d+$/.test(publication.id) ? 'a' : 'div')
+    if (content instanceof HTMLAnchorElement) {
+      content.href = `https://www.pinterest.com/pin/${publication.id}/`
+      content.target = '_blank'
+      content.rel = 'noreferrer'
+      content.setAttribute('aria-label', `Buka Pin ${publication.productTitle} di Pinterest`)
+    }
     const title = document.createElement('strong')
     title.textContent = publication.productTitle || 'Published Shopee product'
     const meta = document.createElement('span')
@@ -222,20 +269,32 @@ function updateControlStates(state: string): void {
   element<HTMLButtonElement>('resume-button').disabled = !['paused', 'authentication_required', 'captcha_detected', 'circuit_open'].includes(state)
   const approveButton = element<HTMLButtonElement>('approve-button')
   approveButton.hidden = state !== 'awaiting_approval'
-  approveButton.disabled = state !== 'awaiting_approval'
+  approveButton.disabled = state !== 'awaiting_approval' || selectedProductIds.size === 0
   element<HTMLButtonElement>('stop-button').disabled = state === 'idle' || state === 'stopped'
 }
 
-async function approveCurrentPin(): Promise<void> {
-  if (!await savePinReview(false)) return
-  if (!window.confirm('Publish this reviewed Pin now? Confirm that the image, copy, affiliate disclosure, destination link, and board are correct.')) return
-  await runCommand({ type: 'APPROVE_CURRENT_PIN' }, 'Pin approved for publication')
+function updateApprovalButton(): void {
+  const button = element<HTMLButtonElement>('approve-button')
+  button.disabled = selectedProductIds.size === 0
+  button.querySelector('span')!.textContent = `Approve ${selectedProductIds.size} selected Pins`
+  if (dashboard) element('batch-summary').textContent = `${dashboard.reviews.length} draft siap · ${selectedProductIds.size} dipilih. Buka preview lalu centang setiap Pin yang Anda setujui.`
+}
+
+async function approvePinBatch(): Promise<void> {
+  if (selectedProductIds.size === 0 || !dashboard) return
+  if (activeReviewId && selectedProductIds.has(activeReviewId) && !await savePinReview(false)) return
+  const selected = dashboard.reviews.filter((review) => selectedProductIds.has(review.productId))
+  const titles = selected.map((review) => `• ${review.productTitle}`).join('\n')
+  if (!window.confirm(`Terbitkan ${selected.length} Pin berikut? Pin pertama segera, sisanya tersebar selama 8–12 jam.\n\n${titles}\n\nHanya Pin yang dipilih ini yang akan dikirim ke Pinterest.`)) return
+  await runCommand({ type: 'APPROVE_PIN_BATCH', productIds: selected.map((review) => review.productId) }, `${selected.length} Pins approved for scheduled publication`)
 }
 
 async function savePinReview(showConfirmation: boolean): Promise<boolean> {
+  if (!activeReviewId) return false
   try {
     await sendMessage({
       type: 'UPDATE_PIN_DRAFT',
+      productId: activeReviewId,
       title: element<HTMLInputElement>('review-pin-title').value,
       description: element<HTMLTextAreaElement>('review-description').value,
       altText: element<HTMLTextAreaElement>('review-alt-text').value,
@@ -272,6 +331,7 @@ function renderSettings(): void {
   element<HTMLInputElement>('board-name').value = settings.boardName
   element<HTMLTextAreaElement>('board-description').value = settings.boardDescription
   element<HTMLInputElement>('discovery-pages').value = String(settings.discoveryMaxPages)
+  element<HTMLInputElement>('affiliate-tags').value = settings.affiliateTags.join(', ')
   element<HTMLInputElement>('dry-run').checked = settings.developerDryRun
   element('pinterest-connection-state').textContent = settings.pinterestAccessToken ? 'Connected / token available' : 'Not connected'
   element<HTMLButtonElement>('disconnect-pinterest').disabled = !settings.pinterestAccessToken
@@ -298,6 +358,8 @@ function captureCurrentProviderFields(): void {
   settings.boardName = element<HTMLInputElement>('board-name').value.trim()
   settings.boardDescription = element<HTMLTextAreaElement>('board-description').value.trim()
   settings.discoveryMaxPages = Number.parseInt(element<HTMLInputElement>('discovery-pages').value, 10) || 3
+  settings.affiliateTags = element<HTMLInputElement>('affiliate-tags').value
+    .split(',').map((tag) => tag.trim()).filter(Boolean)
   settings.developerDryRun = element<HTMLInputElement>('dry-run').checked
 }
 

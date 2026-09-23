@@ -99,4 +99,28 @@ describe('automation repository', () => {
     await repository.saveProducts([product])
     expect(await repository.getProduct('sku-1')).toEqual(product)
   })
+
+  it('persists batch Pin drafts separately from the active runtime payload', async () => {
+    const repository = createAutomationRepository(databaseName)
+    const product: ProductCandidate = {
+      id: 'sku-2', title: 'Lampu Meja', canonicalUrl: 'https://shopee.co.id/product/2',
+      price: 80_500, rating: null, sold: 3000, commissionPercent: 11.5,
+      imageUrl: 'https://down-id.img.susercontent.com/file/lamp', affiliateUrl: 'https://s.shopee.co.id/lamp',
+    }
+    const draft = {
+      id: product.id, product,
+      content: {
+        pinTitle: 'Lampu meja untuk ruang kerja', pinDescription: 'Lampu meja untuk penggunaan sehari-hari. #affiliate',
+        altText: 'Lampu meja pada poster', keywords: ['lampu meja'],
+        layoutDirection: { headline: 'Lampu meja', visualTone: 'natural', accentPreference: 'blue' },
+      },
+      posterDataUrl: 'data:image/jpeg;base64,aA==', provider: 'openrouter' as const, model: 'vendor/model',
+      boardId: '123', boardLabel: 'SHOPEE', createdAt: 123,
+    }
+
+    await repository.saveDraft(draft)
+    expect(await repository.getDraft(product.id)).toEqual(draft)
+    await repository.deleteDraft(product.id)
+    expect(await repository.getDraft(product.id)).toBeUndefined()
+  })
 })

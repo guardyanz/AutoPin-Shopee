@@ -42,7 +42,7 @@ async function renderPoster(message: Extract<ExtensionMessage, { type: 'RENDER_P
 
   context.fillStyle = palette.accent
   context.font = `600 ${layout.eyebrow.fontSize}px Inter, Arial, sans-serif`
-  context.fillText('AKSESORI GADGET PILIHAN', layout.eyebrow.x, layout.eyebrow.y + layout.eyebrow.fontSize)
+  context.fillText('PRODUK PILIHAN', layout.eyebrow.x, layout.eyebrow.y + layout.eyebrow.fontSize)
 
   context.fillStyle = '#172126'
   context.font = `700 ${layout.headline.fontSize}px Inter, Arial, sans-serif`

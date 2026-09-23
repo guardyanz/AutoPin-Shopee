@@ -14,13 +14,14 @@ export type ExtensionMessage =
   | { type: 'START_AUTOMATION' }
   | { type: 'PAUSE_AUTOMATION' }
   | { type: 'RESUME_AUTOMATION' }
-  | { type: 'APPROVE_CURRENT_PIN' }
-  | { type: 'UPDATE_PIN_DRAFT'; title: string; description: string; altText: string }
+  | { type: 'GET_DRAFT_PREVIEW'; productId: string }
+  | { type: 'APPROVE_PIN_BATCH'; productIds: string[] }
+  | { type: 'UPDATE_PIN_DRAFT'; productId: string; title: string; description: string; altText: string }
   | { type: 'STOP_AUTOMATION' }
   | { type: 'SHOPEE_PREFLIGHT' }
-  | { type: 'SHOPEE_DISCOVER'; maxPages: number; maxProducts: number }
+  | { type: 'SHOPEE_DISCOVER'; maxPages: number; maxProducts: number; affiliateTags?: string[] }
   | { type: 'SHOPEE_EXTRACT'; candidate: ProductCandidate }
-  | { type: 'SHOPEE_GENERATE_LINK'; productId: string }
+  | { type: 'SHOPEE_GENERATE_LINK'; productId: string; affiliateTags?: string[] }
   | { type: 'RENDER_POSTER'; product: ProductCandidate; headline: string; visualTone: string; accentPreference: string }
 
 export interface AutomationErrorPayload {

@@ -3,7 +3,7 @@
 AutoPin Shopee adalah ekstensi Chrome Manifest V3 yang menghubungkan alur
 **Shopee Affiliate → Pinterest**. Produk diambil dari halaman penawaran Shopee,
 shortlink affiliate resmi dibuat dari sesi pengguna, materi Pin disiapkan, lalu
-setiap Pin ditinjau pengguna, lalu dipublikasikan melalui Pinterest API v5.
+setiap Pin dibuka dan dipilih pengguna dalam review batch sebelum dipublikasikan melalui Pinterest API v5.
 
 Proyek ini mengganti sumber Adobe Stock pada konsep AutoPin dengan adapter
 Shopee yang terinspirasi dan diadaptasi dari
@@ -17,12 +17,15 @@ Shopee yang terinspirasi dan diadaptasi dari
 - Menggabungkan produk duplikat berdasarkan ID Shopee.
 - Mengambil detail produk dan membuat shortlink resmi `s.shopee.co.id` atau
   `shope.ee` melalui UI Shopee Affiliate yang sedang login.
+- Mendukung 1–5 tag pelacakan opsional pada shortlink melalui formulir resmi
+  **Pakai Tag** / **Tambahkan ke Link** di Shopee Affiliate.
 - Membuat judul, deskripsi, alt text, keyword, dan arahan layout melalui
   OpenRouter, OpenAI, atau Gemini dengan validasi konten faktual.
 - Merender poster Pinterest 1000 × 1500 secara lokal tanpa mengubah bentuk
   produk secara generatif.
-- Memvalidasi Board milik akun terautentikasi, meminta persetujuan eksplisit untuk
-  setiap draft, membuat Pin melalui `POST /v5/pins`, lalu memverifikasi hasil.
+- Memvalidasi Board milik akun terautentikasi, menyiapkan beberapa draft,
+  meminta pengguna membuka dan memilih setiap Pin, lalu menerima satu konfirmasi
+  untuk batch terpilih sebelum membuat Pin melalui `POST /v5/pins` dan memverifikasi hasil.
 - Menyimpan checkpoint di IndexedDB, melanjutkan pekerjaan setelah browser hidup
   kembali, mencegah produk yang sama dipakai ulang selama 30 hari, dan membatasi
   publikasi sampai 10 Pin per hari.
@@ -36,7 +39,7 @@ Shopee Affiliate pages
   → product detail + HD image
   → official affiliate shortlink
   → validated AI copy + local poster
-  → per-Pin review + explicit approval
+  → batch review + pemilihan eksplisit setiap Pin + satu konfirmasi
   → Pinterest API v5 create + verification
   → local publication history
 ```
@@ -70,10 +73,20 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
    **Sandbox**, atau product-limited Trial/Standard token untuk **Production**.
 5. Klik **Muat Board dari Pinterest**, lalu pilih Board dari daftar. Untuk membuat
    Board baru, isi nama/deskripsi dan klik **Create this Board through API**.
-6. Tentukan jumlah halaman Shopee yang akan dipindai (1–10).
+6. Tentukan jumlah halaman Shopee yang akan dipindai (1–10). Isi tag pelacakan
+   opsional, dipisahkan koma, jika ingin melacak performa link di Shopee.
 7. Biarkan **Developer dry run** aktif untuk percobaan pertama.
-8. Klik **Start**, lalu periksa poster, copy, disclosure, Board, jadwal, dan link.
-9. Nonaktifkan dry run dan tekan **Approve Pin** hanya untuk draft yang sudah benar.
+8. Klik **Start**. Setelah draft batch siap, buka preview setiap Pin untuk
+   memeriksa poster, copy, disclosure, Board, dan link. Centang Pin yang ingin
+   diterbitkan; tidak ada Pin yang terpilih otomatis.
+9. Nonaktifkan dry run, lalu tekan **Approve selected Pins** satu kali. Hanya Pin
+   yang dicentang akan dipublikasikan menurut jadwal 8–12 jam. Lihat hasilnya di
+   **Recent pins** dan **Activity**.
+
+Jika menggunakan token Trial sementara, periksa masa berlakunya sebelum batch
+dimulai; token yang kedaluwarsa akan menghentikan posting sampai diganti.
+Pin yang dibuat dengan Trial hanya terlihat oleh pemilik akun sesuai aturan
+Pinterest Trial, bukan publik luas.
 
 Product-limited Trial token bersifat sementara. Untuk Standard access, gunakan
 OAuth Authorization Code melalui backend yang menjaga App Secret tetap server-side.
