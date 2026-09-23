@@ -34,4 +34,19 @@ describe('validateGeneratedContent', () => {
     )
     expect(result).toMatchObject({ success: false })
   })
+
+  it('identifies malformed AI fields so the repair prompt can target them', () => {
+    const result = validateGeneratedContent({
+      ...validContent,
+      keywords: ['kabel fast charging', ''],
+      layoutDirection: { ...validContent.layoutDirection, headline: undefined },
+    }, [])
+    expect(result).toEqual({
+      success: false,
+      errors: expect.arrayContaining([
+        expect.stringContaining('keywords[1]'),
+        expect.stringContaining('layoutDirection.headline'),
+      ]),
+    })
+  })
 })

@@ -24,7 +24,12 @@ export type ContentValidationResult =
 export function validateGeneratedContent(input: unknown, _sourceFacts: string[]): ContentValidationResult {
   const parsed = generatedPinContentSchema.safeParse(input)
   if (!parsed.success) {
-    return { success: false, errors: parsed.error.issues.map((issue) => issue.message) }
+    const errors = parsed.error.issues.map((issue) => {
+      const field = issue.path.reduce<string>((path, segment) =>
+        typeof segment === 'number' ? `${path}[${segment}]` : `${path}${path ? '.' : ''}${String(segment)}`, '')
+      return `${field || 'response'}: ${issue.message}`
+    })
+    return { success: false, errors }
   }
 
   const errors: string[] = []

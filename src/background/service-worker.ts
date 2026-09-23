@@ -1,6 +1,6 @@
 import { validateGeneratedContent } from '../core/content-validation'
 import type { ShopeeDiscoveryResult } from '../adapters/shopee-pagination'
-import { buildPinGenerationPrompt } from '../core/prompt'
+import { buildPinGenerationPrompt, buildPinRepairPrompt } from '../core/prompt'
 import type { ExtensionMessage, MessageResponse } from '../core/messages'
 import { createDailySchedule, localDayKey } from '../core/scheduler'
 import { validateSettingsForStart, type AutomationSettings } from '../core/settings'
@@ -516,7 +516,7 @@ async function generateCopy(job: JobSnapshot): Promise<void> {
   let generation = await generateWithFallback(settings, buildPinGenerationPrompt(product))
   let validated = validateGeneratedContent(generation.data, [product.title, product.description ?? ''])
   if (!validated.success) {
-    const repairPrompt = `${buildPinGenerationPrompt(product)}\n\nPerbaiki respons karena: ${validated.errors.join(', ')}`
+    const repairPrompt = buildPinRepairPrompt(product, generation.data, validated.errors)
     const repaired = await generateWithFallback(settings, repairPrompt)
     validated = validateGeneratedContent(repaired.data, [product.title, product.description ?? ''])
     if (!validated.success) throw new AutomationError('invalid_generated_content', validated.errors.join(', '))
