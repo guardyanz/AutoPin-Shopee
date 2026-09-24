@@ -22,7 +22,7 @@ export type ExtensionMessage =
   | { type: 'STOP_AUTOMATION' }
   | { type: 'SHOPEE_PREFLIGHT' }
   | { type: 'SHOPEE_CATEGORIES' }
-  | { type: 'SHOPEE_DISCOVER'; maxPages: number; maxProducts: number; category?: string; keywords?: string; affiliateTags?: string[] }
+  | { type: 'SHOPEE_DISCOVER'; maxProducts: number; previousPageSignature?: string; skipProductIds?: string[]; category?: string; keywords?: string; affiliateTags?: string[] }
   | { type: 'SHOPEE_EXTRACT'; candidate: ProductCandidate }
   | { type: 'SHOPEE_GENERATE_LINK'; productId: string; affiliateTags?: string[] }
   | { type: 'RENDER_POSTER'; product: ProductCandidate; headline: string; visualTone: string; accentPreference: string }

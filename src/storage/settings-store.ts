@@ -37,7 +37,6 @@ function enforceComplianceDefaults(settings: AutomationSettings): AutomationSett
   }
   return {
     ...settings,
-    discoveryMaxPages: clampInteger(settings.discoveryMaxPages, 1, 10, 3),
     productCategory: String(settings.productCategory ?? '').trim().slice(0, 80),
     productKeywords: String(settings.productKeywords ?? '').trim().slice(0, 100),
     affiliateTags,

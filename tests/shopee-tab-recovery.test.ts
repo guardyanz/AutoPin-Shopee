@@ -48,9 +48,25 @@ describe('Shopee tab connection recovery', () => {
     expect(browser.reload).toHaveBeenCalled()
     expect((await browser.activity()).some((entry) => entry.message.includes('content_script_unavailable'))).toBe(true)
   })
+
+  it('automatically scans past page ten until Shopee has no next page', async () => {
+    const browser = await startBrowserSimulation(false, 12)
+    await browser.start()
+
+    await vi.waitFor(async () => {
+      expect((await browser.status()).state).toBe('stopped')
+      expect(browser.sendMessage.mock.calls.filter(([, message]) => message.type === 'SHOPEE_DISCOVER')).toHaveLength(12)
+    }, { timeout: 7_000 })
+    const discoveryRequests = browser.sendMessage.mock.calls
+      .map(([, message]) => message)
+      .filter((message) => message.type === 'SHOPEE_DISCOVER')
+    expect(discoveryRequests[1]).toMatchObject({ previousPageSignature: '1:' })
+    expect(discoveryRequests[11]).toMatchObject({ previousPageSignature: '11:' })
+    expect((await browser.activity()).some((entry) => entry.stage === 'paused')).toBe(false)
+  })
 })
 
-async function startBrowserSimulation(alwaysMissing: boolean) {
+async function startBrowserSimulation(alwaysMissing: boolean, availablePages = 1) {
   const localData: Record<string, unknown> = {
     automationSettings: {
       ...structuredClone(DEFAULT_SETTINGS),
@@ -65,13 +81,17 @@ async function startBrowserSimulation(alwaysMissing: boolean) {
   let listener: MessageListener | undefined
   let alarmListener: ((alarm: { name: string }) => void) | undefined
   let messageAttempts = 0
+  let scannedPages = 0
   const sendMessage = vi.fn(async (_tabId: number, message: ExtensionMessage) => {
     messageAttempts += 1
     if (alwaysMissing || messageAttempts === 1) {
       throw new Error('Could not establish connection. Receiving end does not exist.')
     }
     if (message.type === 'SHOPEE_PREFLIGHT') return { ok: true, data: { state: 'ready', url: 'https://affiliate.shopee.co.id/offer/product_offer' } }
-    if (message.type === 'SHOPEE_DISCOVER') return { ok: true, data: { candidates: [], pagesScanned: 1 } }
+    if (message.type === 'SHOPEE_DISCOVER') {
+      scannedPages += 1
+      return { ok: true, data: { candidates: [], pagesScanned: 1, pageSignature: `${scannedPages}:`, hasNextPage: scannedPages < availablePages } }
+    }
     throw new Error(`Unexpected Shopee message: ${message.type}`)
   })
   const reload = vi.fn(async (_tabId: number) => undefined)

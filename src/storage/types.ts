@@ -4,6 +4,11 @@ export interface JobSnapshot {
   id: 'active'
   state: JobState
   queueProductIds: string[]
+  discoveryPageSignature?: string
+  discoveryHasNextPage?: boolean
+  discoveryHasMoreOnPage?: boolean
+  discoveryPagesScanned?: number
+  discoverySeenProductIds?: string[]
   draftProductIds?: string[]
   reviewedProductIds?: string[]
   approvedProductIds?: string[]

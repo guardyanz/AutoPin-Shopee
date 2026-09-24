@@ -9,7 +9,6 @@ describe('automation settings', () => {
     expect(DEFAULT_SETTINGS.minimumWindowHours).toBe(8)
     expect(DEFAULT_SETTINGS.maximumWindowHours).toBe(12)
     expect(DEFAULT_SETTINGS.disclosure).toBe('#affiliate')
-    expect(DEFAULT_SETTINGS.discoveryMaxPages).toBe(3)
     expect(DEFAULT_SETTINGS.developerDryRun).toBe(true)
     expect(DEFAULT_SETTINGS.affiliateTags).toEqual([])
   })

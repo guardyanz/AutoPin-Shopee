@@ -94,6 +94,6 @@ async function discoverThroughContentScript(): Promise<MessageResponse<ShopeeDis
   vi.resetModules()
   await import('../src/content/shopee')
   return new Promise((resolve) => {
-    listener!({ type: 'SHOPEE_DISCOVER', maxPages: 1, maxProducts: 1 }, { id: 'test-extension' }, resolve)
+    listener!({ type: 'SHOPEE_DISCOVER', maxProducts: 1 }, { id: 'test-extension' }, resolve)
   })
 }

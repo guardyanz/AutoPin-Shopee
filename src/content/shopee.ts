@@ -7,7 +7,7 @@ import {
 } from '../adapters/shopee-detail'
 import { rankProducts } from '../core/eligibility'
 import type { ExtensionMessage, MessageResponse } from '../core/messages'
-import { discoverShopeePages, type ShopeeDiscoveryDiagnostics } from '../adapters/shopee-pagination'
+import { discoverShopeePage, type ShopeeDiscoveryDiagnostics } from '../adapters/shopee-pagination'
 import { applyShopeeAffiliateTags } from '../adapters/shopee-affiliate-tags'
 import { listShopeeCategories, selectShopeeCategory } from '../adapters/shopee-category'
 import { matchesProductKeywords } from '../adapters/shopee-keywords'
@@ -36,13 +36,14 @@ async function handleMessage(message: ExtensionMessage): Promise<unknown> {
       if (state !== 'ready') throw codedError(state, `Shopee page is not ready: ${state}`)
       await selectShopeeCategory(document, message.category ?? '')
       const diagnostics: ShopeeDiscoveryDiagnostics = { productsRead: 0, productsMatchingFilters: 0, affiliateLinkFailures: 0 }
-      const discovery = await discoverShopeePages(
+      const discovery = await discoverShopeePage(
         document,
-        message.maxPages,
         message.maxProducts,
         (candidates, limit) => enrichAffiliateLinks(candidates, limit, diagnostics, message.affiliateTags ?? [], message.keywords ?? ''),
+        message.previousPageSignature,
+        message.skipProductIds,
       )
-      return { candidates: rankProducts(discovery.candidates), pagesScanned: discovery.pagesScanned, diagnostics }
+      return { ...discovery, candidates: rankProducts(discovery.candidates), diagnostics }
     }
     case 'SHOPEE_CATEGORIES':
       if (detectShopeePageState(document) !== 'ready') throw codedError('shopee_page_not_ready', 'Halaman Penawaran Produk Shopee belum siap.')

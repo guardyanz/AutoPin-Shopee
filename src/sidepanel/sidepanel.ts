@@ -138,9 +138,11 @@ function renderDashboard(data: DashboardData): void {
   element('quota-limit').textContent = `/ ${status.dailyLimit}`
   element<HTMLElement>('quota-progress').style.width = `${Math.min(100, status.completedToday / status.dailyLimit * 100)}%`
   element('current-product').textContent = status.activeProductTitle || 'Belum ada produk'
-  element('next-action').textContent = status.state === 'paused' && status.message.includes('draft terkumpul')
-    ? 'Tambah halaman/filter, lalu Lanjutkan'
-    : status.nextRunAt ? formatFuture(status.nextRunAt) : 'Belum dijadwalkan'
+  element('next-action').textContent = status.state === 'paused' && status.message.includes('draft; seluruh halaman')
+    ? 'Sumber habis: periksa filter sebelum melanjutkan'
+    : status.state === 'discover_products' || status.state === 'select_candidate'
+      ? 'Berjalan otomatis sampai target batch'
+      : status.nextRunAt ? formatFuture(status.nextRunAt) : 'Belum dijadwalkan'
   element('updated-at').textContent = `Diperbarui ${formatTime(status.updatedAt)}`
 
   const dot = element('status-dot')
@@ -482,7 +484,6 @@ function renderSettings(): void {
   renderBoardOptions()
   element<HTMLInputElement>('board-name').value = settings.boardName
   element<HTMLTextAreaElement>('board-description').value = settings.boardDescription
-  element<HTMLInputElement>('discovery-pages').value = String(settings.discoveryMaxPages)
   element<HTMLInputElement>('batch-size').value = String(settings.batchSize)
   element<HTMLInputElement>('product-category').value = settings.productCategory
   element<HTMLInputElement>('product-keywords').value = settings.productKeywords
@@ -513,7 +514,6 @@ function captureCurrentProviderFields(): void {
   settings.pinterestBoardId = element<HTMLSelectElement>('pinterest-board-id').value.trim()
   settings.boardName = element<HTMLInputElement>('board-name').value.trim()
   settings.boardDescription = element<HTMLTextAreaElement>('board-description').value.trim()
-  settings.discoveryMaxPages = Number.parseInt(element<HTMLInputElement>('discovery-pages').value, 10) || 3
   settings.batchSize = Number.parseInt(element<HTMLInputElement>('batch-size').value, 10) || 10
   settings.productCategory = element<HTMLInputElement>('product-category').value.trim()
   settings.productKeywords = element<HTMLInputElement>('product-keywords').value.trim()

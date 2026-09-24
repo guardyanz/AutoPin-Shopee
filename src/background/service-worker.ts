@@ -272,9 +272,22 @@ async function resumeAutomation(): Promise<{ resumed: true }> {
   const approvedPending = (job.approvedProductIds?.length ?? 0) > (job.nextSlotIndex ?? 0)
   const resumablePublishStage = ['await_publish_slot', 'fill_pinterest', 'publish_pinterest', 'verify_publication', 'commit_result', 'cleanup']
   const hasUnapprovedDrafts = (job.draftProductIds?.length ?? 0) > 0
+  const settings = await loadSettings()
+  const completedToday = await repository.countPublicationsForDay(localDayKey())
+  const reviewTarget = Math.min(settings.batchSize, settings.dailyLimit - completedToday)
+  const completeUnapprovedBatch = hasUnapprovedDrafts && (job.draftProductIds?.length ?? 0) >= reviewTarget
   job.state = approvedPending
     ? resumablePublishStage.includes(job.pausedFrom ?? '') ? job.pausedFrom! : 'await_publish_slot'
-    : hasUnapprovedDrafts && (job.state === 'circuit_open' || job.pausedFrom === 'awaiting_approval') ? 'awaiting_approval' : 'preflight'
+    : completeUnapprovedBatch && (job.state === 'circuit_open' || job.pausedFrom === 'awaiting_approval') ? 'awaiting_approval'
+      : hasUnapprovedDrafts || job.pausedFrom === 'discover_products' ? 'discover_products' : 'preflight'
+  if (job.state === 'discover_products') {
+    // A manual resume may follow a filter change or newly available offers.
+    // Revisit from page one, but retain seen IDs and prepared drafts.
+    delete job.discoveryPageSignature
+    delete job.discoveryHasNextPage
+    delete job.discoveryHasMoreOnPage
+    job.discoveryPagesScanned = 0
+  }
   if (job.state === 'awaiting_approval') {
     delete job.activeProductId
     await clearRuntimePayload()
@@ -402,6 +415,17 @@ async function updatePinDraft(message: Extract<ExtensionMessage, { type: 'UPDATE
 async function resumeFromCheckpoint(): Promise<void> {
   const job = await repository.loadJob()
   if (!job) return
+  // Older versions paused every incomplete batch at the page cap. Resume only
+  // that specific legacy pause, never an explicit pause requested by the user.
+  if (job.state === 'paused' && job.pausedFrom === 'discover_products') {
+    const status = await getRuntimeStatus()
+    if (status.message.includes('draft terkumpul; menunggu produk tambahan')) {
+      job.state = 'discover_products'
+      delete job.pausedFrom
+      await repository.saveJob(job)
+      await log('info', 'discover_products', 'Melanjutkan batch lama secara otomatis tanpa batas halaman.')
+    }
+  }
   if (job.state === 'publish_pinterest' && job.publishOutcomeAmbiguous) {
     const payload = await getRuntimePayload()
     if (payload.pinterestPinId && payload.publicationConfirmed) {
@@ -454,8 +478,10 @@ async function resumeFromCheckpoint(): Promise<void> {
     const settings = await loadSettings()
     const completedToday = await repository.countPublicationsForDay(localDayKey())
     if ((job.draftProductIds?.length ?? 0) < Math.min(settings.batchSize, settings.dailyLimit - completedToday)) {
-      await holdIncompleteBatch(job, 'Batch lama belum mencapai target setelah ekstensi diperbarui; draft tetap tersimpan.')
-      return
+      job.state = 'discover_products'
+      job.updatedAt = Date.now()
+      await repository.saveJob(job)
+      await log('info', 'discover_products', 'Batch lama belum mencapai target; pemindaian dilanjutkan otomatis.')
     }
   }
   if (isTerminalOrPaused(job.state)) return
@@ -477,6 +503,15 @@ async function runAdvance(): Promise<void> {
   return advancePromise
 }
 
+async function scheduleContinuation(): Promise<void> {
+  const job = await repository.loadJob()
+  if (!job || isTerminalOrPaused(job.state)) return
+  const when = Date.now() + 1_000
+  await chrome.alarms.create(RUN_ALARM, { when })
+  const status = await getRuntimeStatus()
+  if (status.state === job.state) await setRuntimeStatus({ ...status, nextRunAt: when })
+}
+
 async function advanceWorkflow(): Promise<void> {
   let job = await requireJob()
   while (!isTerminalOrPaused(job.state)) {
@@ -489,9 +524,17 @@ async function advanceWorkflow(): Promise<void> {
         break
       case 'discover_products':
         await discoverProducts(job)
+        if ((await requireJob()).state === 'discover_products') {
+          await scheduleContinuation()
+          return
+        }
         break
       case 'select_candidate':
         await selectCandidate(job)
+        if ((await requireJob()).state === 'discover_products') {
+          await scheduleContinuation()
+          return
+        }
         break
       case 'extract_product':
         await extractProduct(job)
@@ -504,7 +547,8 @@ async function advanceWorkflow(): Promise<void> {
         break
       case 'render_poster':
         await renderPoster(job)
-        break
+        await scheduleContinuation()
+        return
       case 'await_publish_slot':
         if (await awaitPublishSlot(job)) return
         break
@@ -556,28 +600,47 @@ async function runResearch(job: JobSnapshot): Promise<void> {
 
 async function discoverProducts(job: JobSnapshot): Promise<void> {
   const settings = await loadSettings()
-  await updateStatus('discover_products', `Scanning up to ${settings.discoveryMaxPages} Shopee Affiliate pages`, job.completedToday)
+  const target = Math.max(1, Math.min(settings.batchSize, settings.dailyLimit - job.completedToday))
+  if ((job.draftProductIds?.length ?? 0) >= target) {
+    await transition(job, 'awaiting_approval', `${target} draft mencapai target; siap disetujui bersama`)
+    return
+  }
+  await updateStatus('discover_products', `${job.draftProductIds?.length ?? 0}/${target} draft siap; memindai halaman Shopee berikutnya secara otomatis`, job.completedToday)
   const tabId = await ensureTab('affiliate.shopee.co.id', AFFILIATE_URL)
-  await navigateAndWait(tabId, AFFILIATE_URL)
+  if (!job.discoveryPageSignature) await navigateAndWait(tabId, AFFILIATE_URL)
   const result = await withSingleRetry(() => sendToTab<ShopeeDiscoveryResult>(tabId, {
     type: 'SHOPEE_DISCOVER',
-    maxPages: settings.discoveryMaxPages,
-    maxProducts: Math.max(1, Math.min(settings.batchSize, settings.dailyLimit - job.completedToday)),
+    maxProducts: Math.min(10, target - (job.draftProductIds?.length ?? 0)),
+    previousPageSignature: job.discoveryHasMoreOnPage ? undefined : job.discoveryPageSignature,
+    skipProductIds: job.discoverySeenProductIds ?? [],
     category: settings.productCategory,
     keywords: settings.productKeywords,
     affiliateTags: settings.affiliateTags,
   }))
+  if ((await repository.loadJob())?.state !== 'discover_products') return
+  const isNewPage = result.pageSignature !== job.discoveryPageSignature
+  job.discoveryPageSignature = result.pageSignature
+  job.discoveryHasNextPage = result.hasNextPage
+  job.discoveryHasMoreOnPage = result.hasMoreOnPage
+  job.discoveryPagesScanned = (job.discoveryPagesScanned ?? 0) + (isNewPage ? result.pagesScanned : 0)
+  job.discoverySeenProductIds = [...new Set([...(job.discoverySeenProductIds ?? []), ...result.candidates.map((candidate) => candidate.id)])]
+  job.updatedAt = Date.now()
+  await repository.saveJob(job)
   const diagnostics = result.diagnostics
   if (diagnostics) {
     await log('info', 'discover_products', `Scanned ${result.pagesScanned} page(s): ${diagnostics.productsRead} products read, ${diagnostics.productsMatchingFilters} passed filters, ${diagnostics.affiliateLinkFailures} affiliate links failed`)
   }
   if (result.candidates.length === 0) {
+    if (result.hasMoreOnPage || result.hasNextPage) {
+      await transition(job, 'discover_products', `${job.draftProductIds?.length ?? 0}/${target} draft; lanjut otomatis ke halaman Shopee berikutnya`)
+      return
+    }
     if ((job.draftProductIds?.length ?? 0) > 0) {
-      await holdIncompleteBatch(job, `Pemindaian ${result.pagesScanned} halaman tidak menemukan produk tambahan yang sesuai.`)
+      await holdIncompleteBatch(job, `Seluruh ${job.discoveryPagesScanned ?? 0} halaman Shopee yang tersedia sudah dipindai; tidak ada produk tambahan yang sesuai.`)
       return
     }
     const message = !diagnostics || diagnostics.productsRead === 0
-      ? `Tidak ada kartu produk yang terbaca dari ${result.pagesScanned} halaman. Muat ulang halaman Shopee Affiliate lalu coba kembali.`
+      ? `Tidak ada kartu produk yang terbaca sampai halaman terakhir. Muat ulang halaman Shopee Affiliate lalu coba kembali.`
       : diagnostics.productsMatchingFilters === 0
         ? `${diagnostics.productsRead} produk terbaca, tetapi tidak ada yang lolos filter harga, komisi, dan metrik yang tersedia.`
         : `${diagnostics.productsMatchingFilters} produk lolos filter, tetapi link affiliate gagal diperoleh. ${diagnostics.lastAffiliateError?.message ?? 'Periksa tombol Buat Link di Shopee Affiliate.'}`
@@ -611,8 +674,13 @@ async function selectCandidate(job: JobSnapshot): Promise<void> {
     }
   }
   if (!selectedId) {
+    if (job.discoveryHasMoreOnPage || job.discoveryHasNextPage) {
+      job.queueProductIds = []
+      await transition(job, 'discover_products', `${draftIds.length}/${Math.min(settings.batchSize, settings.dailyLimit - currentCount)} draft; mencari produk di halaman berikutnya`)
+      return
+    }
     if (draftIds.length > 0) {
-      await holdIncompleteBatch(job, 'Antrean produk yang ditemukan sudah habis sebelum target batch tercapai.')
+      await holdIncompleteBatch(job, 'Halaman terakhir Shopee tercapai sebelum target batch terkumpul.')
       return
     }
     job.state = 'stopped'
@@ -640,7 +708,7 @@ async function holdIncompleteBatch(job: JobSnapshot, reason: string): Promise<vo
   delete job.activeProductId
   await chrome.alarms.clear(RUN_ALARM)
   await clearRuntimePayload()
-  await transition(job, 'paused', `${job.draftProductIds?.length ?? 0}/${target} draft terkumpul; menunggu produk tambahan.`)
+  await transition(job, 'paused', `${job.draftProductIds?.length ?? 0}/${target} draft; seluruh halaman Shopee habis atau sumber tidak tersedia.`)
   await log('warning', 'paused', reason)
 }
 

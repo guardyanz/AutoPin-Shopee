@@ -287,7 +287,7 @@ test('a partial draft batch waits for more products instead of requesting approv
     }), { timeout: 10_000 }).toBe('paused')
     await page.getByRole('button', { name: 'Muat ulang status' }).click()
     await expect(page.locator('#dashboard-title')).toContainText('1/100')
-    await expect(page.locator('#next-action')).toHaveText('Tambah halaman/filter, lalu Lanjutkan')
+    await expect(page.locator('#next-action')).toHaveText('Sumber habis: periksa filter sebelum melanjutkan')
     await expect(page.getByRole('button', { name: /Setujui .* Pin pilihan/ })).toBeHidden()
     await expect(page.getByRole('button', { name: 'Lanjutkan' })).toBeEnabled()
     await page.screenshot({ path: 'artifacts/partial-batch.png', fullPage: true })

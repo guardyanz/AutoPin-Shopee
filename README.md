@@ -11,7 +11,8 @@ Shopee yang terinspirasi dan diadaptasi dari
 
 ## Yang sudah diimplementasikan
 
-- Memindai 1–10 halaman penawaran Shopee Affiliate secara berurutan.
+- Memindai halaman penawaran Shopee Affiliate secara otomatis sampai target batch
+  tercapai atau halaman terakhir, tanpa batas halaman buatan dan tanpa klik Lanjutkan per halaman.
 - Mengenali beberapa variasi DOM kartu produk dan menghapus suffix resize untuk
   memakai gambar Shopee beresolusi lebih tinggi.
 - Menggabungkan produk duplikat berdasarkan ID Shopee.
@@ -73,8 +74,8 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
    **Sandbox**, atau product-limited Trial/Standard token untuk **Production**.
 5. Klik **Muat Board dari Pinterest**, lalu pilih Board dari daftar. Untuk membuat
    Board baru, isi nama/deskripsi dan klik **Buat Board melalui API**.
-6. Bagian **Produk & batch** sudah terbuka. Tentukan jumlah halaman Shopee yang akan dipindai (1–10), ukuran batch
-   (1–100), serta tab kategori Shopee. Klik **Muat kategori** saat halaman
+6. Bagian **Produk & batch** sudah terbuka. Tentukan ukuran batch (1–100)
+   serta tab kategori Shopee. Klik **Muat kategori** saat halaman
    Penawaran Produk terbuka, kemudian pilih nama tab yang tersedia. Kata kunci
    produk bersifat opsional: setiap kata harus ada pada judul produk. Untuk tema
    Board yang sempit, pakai kategori dan kata kunci bersamaan; untuk tema luas,
@@ -96,10 +97,11 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
    Lihat hasilnya di **Pin terbaru** dan **Aktivitas**.
 
 Persetujuan batch baru muncul setelah jumlah draft mencapai target **Pin per
-batch**, dibatasi jatah terbit hari itu. Jika antrean produk dari halaman yang
-dipindai habis lebih dulu, PinShop menyimpan draft dan menjeda pengumpulan;
-tidak meminta persetujuan untuk satu-dua draft. Tambah **Halaman dipindai**
-(maksimal 10), atau sesuaikan kategori/kata kunci, lalu klik **Lanjutkan**.
+batch**, dibatasi jatah terbit hari itu. PinShop berpindah halaman sendiri
+dan melanjutkan dari checkpoint sampai target terkumpul. Jika halaman Shopee
+benar-benar habis lebih dulu, draft tetap tersimpan dan pengumpulan dijeda;
+tidak ada permintaan persetujuan untuk batch yang belum lengkap. Sesuaikan
+kategori/kata kunci atau tunggu produk baru, lalu klik **Lanjutkan**.
 Periksa **Aktivitas** untuk melihat jumlah produk terbaca, yang lolos filter,
 dan kegagalan tautan afiliasi. Misalnya jika 10 Pin sudah terbit hari ini,
 target maksimum yang dapat disetujui hari itu adalah 90 Pin, bukan 100.

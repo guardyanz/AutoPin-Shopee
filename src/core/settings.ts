@@ -20,7 +20,6 @@ export interface AutomationSettings {
   boardDescription: string
   researchKeywords: string[]
   researchUpdatedAt: number | null
-  discoveryMaxPages: number
   productCategory: string
   productKeywords: string
   affiliateTags: string[]
@@ -60,7 +59,6 @@ export const DEFAULT_SETTINGS: AutomationSettings = {
   boardDescription: '',
   researchKeywords: [],
   researchUpdatedAt: null,
-  discoveryMaxPages: 3,
   productCategory: '',
   productKeywords: '',
   affiliateTags: [],

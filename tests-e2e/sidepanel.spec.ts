@@ -51,7 +51,7 @@ test('loads the unpacked extension side panel without layout overflow', async ()
     await expect(page.locator('#source-settings')).toHaveAttribute('open', '')
     await expect(page.locator('#ai-settings')).not.toHaveAttribute('open', '')
     await expect(page.locator('#pinterest-settings')).not.toHaveAttribute('open', '')
-    await expect(page.locator('#discovery-pages')).toHaveValue('3')
+    await expect(page.locator('#discovery-pages')).toHaveCount(0)
     await expect(page.locator('#affiliate-tags')).toHaveValue('')
     await expect(page.locator('#batch-size')).toHaveValue('10')
     await expect(page.locator('#product-category')).toHaveValue('')
@@ -249,7 +249,7 @@ test('discovers Affiliate offers without ratings through the installed content s
     await expect(panel.locator('#category-list-state')).toContainText('3 tab tersedia')
     const result = await worker.evaluate(async (url) => {
       const tabs = await chrome.tabs.query({ url })
-      return chrome.tabs.sendMessage(tabs[0].id!, { type: 'SHOPEE_DISCOVER', maxPages: 1, maxProducts: 1, category: 'Perlengkapan Rumah', keywords: 'meja lampu' })
+      return chrome.tabs.sendMessage(tabs[0].id!, { type: 'SHOPEE_DISCOVER', maxProducts: 1, category: 'Perlengkapan Rumah', keywords: 'meja lampu' })
     }, affiliateUrl)
     expect(result).toMatchObject({ ok: true, data: {
       candidates: [{ id: '123', price: 80_500, sold: 3_000, rating: null, commissionPercent: 11.5, affiliateUrl: 'https://s.shopee.co.id/lamp-test' }],
@@ -320,7 +320,7 @@ test('uses Shopee’s tag form when generating an Affiliate shortlink', async ()
     const response = await worker.evaluate(async (url) => {
       const tabs = await chrome.tabs.query({ url })
       return chrome.tabs.sendMessage(tabs[0].id!, {
-        type: 'SHOPEE_DISCOVER', maxPages: 1, maxProducts: 1, affiliateTags: ['PinterestFeed'],
+        type: 'SHOPEE_DISCOVER', maxProducts: 1, affiliateTags: ['PinterestFeed'],
       })
     }, affiliateUrl)
     expect(response).toMatchObject({ ok: true, data: { candidates: [{ affiliateUrl: 'https://s.shopee.co.id/tagged-pinterest-feed' }] } })
