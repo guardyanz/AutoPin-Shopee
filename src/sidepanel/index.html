@@ -35,9 +35,9 @@
               <h1 id="dashboard-title">Siap memulai pemeriksaan</h1>
             </div>
           </div>
-          <div class="quota" aria-label="Batas publikasi harian">
-            <strong id="quota-count">0</strong>
-            <span id="quota-limit">/ 100</span>
+          <div class="quota" aria-label="Pin terbit hari ini dari batas harian">
+            <small>Terbit hari ini</small>
+            <div class="quota-value"><strong id="quota-count">0</strong><span id="quota-limit">/ 100</span></div>
           </div>
         </div>
 
@@ -60,7 +60,7 @@
           <button class="button button-primary" id="start-button" type="button"><i data-lucide="play"></i><span>Mulai</span></button>
           <button class="button" id="pause-button" type="button"><i data-lucide="pause"></i><span>Jeda</span></button>
           <button class="button" id="resume-button" type="button"><i data-lucide="rotate-ccw"></i><span>Lanjutkan</span></button>
-          <button class="icon-button icon-button-danger" id="stop-button" type="button" title="Hentikan otomatisasi" aria-label="Hentikan otomatisasi"><i data-lucide="square"></i></button>
+          <button class="button button-danger stop-button" id="stop-button" type="button" hidden><i data-lucide="square"></i><span>Hentikan batch</span></button>
           <button class="button button-primary approval-button" id="approve-button" type="button" hidden><i data-lucide="shield-check"></i><span>Setujui Pin pilihan</span></button>
           <button class="button button-primary publish-now-button" id="publish-now-button" type="button" hidden>Terbitkan sisa sekarang</button>
         </div>

@@ -86,7 +86,8 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
    otomatis. **Detail / Edit** bersifat opsional untuk melihat ukuran penuh atau
    mengubah teks. Gunakan **Jeda**
    bila ingin melanjutkan review nanti; draft tetap tersimpan. **Stop** akan
-   membuang draft yang belum diterbitkan setelah konfirmasi.
+   membuang draft yang belum diterbitkan setelah konfirmasi. Tombol
+   **Hentikan batch** hanya muncul saat ada proses aktif.
 9. Nonaktifkan uji tanpa publikasi, lalu tekan **Setujui Pin pilihan** satu kali. Periksa
    daftar Pin yang tampil di dialog dan konfirmasikan. Hanya Pin yang dipilih
    dipublikasikan langsung berurutan dengan jeda sekitar 10 detik.
@@ -97,6 +98,13 @@ Jika menggunakan token Trial sementara, periksa masa berlakunya sebelum batch
 dimulai; token yang kedaluwarsa akan menghentikan posting sampai diganti.
 Pin yang dibuat dengan Trial hanya terlihat oleh pemilik akun sesuai aturan
 Pinterest Trial, bukan publik luas.
+
+Angka **Terbit hari ini** (misalnya `10/100`) adalah Pin yang tercatat sudah
+terbit pada hari kalender lokal, bukan jumlah draft lama. Menekan **Hentikan
+batch** membersihkan draft yang belum terbit, tetapi tidak menghapus riwayat
+publikasi atau mengembalikan jatah harian. Untuk batch baru setelah status
+**Berhenti**, perbaiki sumber Shopee bila perlu lalu klik **Mulai**. Hitungan
+hari ini dihitung ulang dari riwayat publikasi dan kembali nol pada hari baru.
 
 Product-limited Trial token bersifat sementara. Untuk Standard access, gunakan
 OAuth Authorization Code melalui backend yang menjaga App Secret tetap server-side.

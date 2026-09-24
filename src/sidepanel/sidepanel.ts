@@ -360,7 +360,7 @@ function updateControlStates(state: string): void {
   approveButton.disabled = state !== 'awaiting_approval' || selectedProductIds.size === 0
   const oldScheduledWait = state === 'await_publish_slot' && (dashboard?.status.nextRunAt ?? 0) > Date.now() + 60_000
   element<HTMLButtonElement>('publish-now-button').hidden = !oldScheduledWait
-  element<HTMLButtonElement>('stop-button').disabled = state === 'idle' || state === 'stopped'
+  element<HTMLButtonElement>('stop-button').hidden = ['idle', 'stopped', 'daily_limit_reached'].includes(state)
 }
 
 function updateApprovalButton(): void {
@@ -396,8 +396,7 @@ async function publishRemainingNow(): Promise<void> {
 }
 
 async function stopAutomationWithConfirmation(): Promise<void> {
-  if (dashboard && ['awaiting_approval', 'paused'].includes(dashboard.status.state)
-    && !window.confirm('Stop akan membuang draft yang belum diterbitkan. Pilih Pause untuk menyimpan dan melanjutkan review nanti. Tetap Stop?')) return
+  if (!window.confirm('Hentikan batch ini? Draft yang belum terbit akan dibuang. Pin yang sudah terbit dan hitungan hari ini tetap tersimpan. Pilih Jeda jika ingin melanjutkan nanti.')) return
   await runCommand({ type: 'STOP_AUTOMATION' }, 'Automation stopped')
 }
 

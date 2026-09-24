@@ -81,6 +81,16 @@ test('loads the unpacked extension side panel without layout overflow', async ()
     await page.setViewportSize({ width: 320, height: 700 })
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await page.screenshot({ path: 'artifacts/settings-320x700.png', fullPage: true })
+
+    await page.evaluate(async () => chrome.storage.local.set({ runtimeStatus: {
+      state: 'stopped', message: 'Batch sebelumnya berhenti', completedToday: 10,
+      dailyLimit: 100, updatedAt: Date.now() - 86_400_000,
+    } }))
+    await page.getByRole('button', { name: 'Ringkasan' }).click()
+    await page.getByRole('button', { name: 'Muat ulang status' }).click()
+    await expect(page.locator('#quota-count')).toHaveText('0')
+    await expect(page.getByText('Terbit hari ini')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Hentikan batch' })).toBeHidden()
   } finally {
     await context?.close()
     await rm(profilePath, { recursive: true, force: true })

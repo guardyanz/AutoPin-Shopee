@@ -65,6 +65,9 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
     case 'GET_DASHBOARD':
       {
         const status = await getRuntimeStatus()
+        // The saved status may be from an earlier day or an interrupted run.
+        // Publication history is the source of truth for the daily quota.
+        status.completedToday = await repository.countPublicationsForDay(localDayKey())
         status.dailyLimit = (await loadSettings()).dailyLimit
         const job = status.state === 'awaiting_approval' ? await repository.loadJob() : undefined
         const drafts = job ? await Promise.all((job.draftProductIds ?? []).map((id) => repository.getDraft(id))) : []
@@ -298,7 +301,7 @@ async function stopAutomation(): Promise<{ stopped: true }> {
   }
   await chrome.alarms.clear(RUN_ALARM)
   await clearRuntimePayload()
-  await updateStatus('stopped', 'Stopped by user', job?.completedToday ?? 0)
+  await updateStatus('stopped', 'Stopped by user', await repository.countPublicationsForDay(localDayKey()))
   await log('warning', 'stopped', 'Automation stopped by user')
   return { stopped: true }
 }
