@@ -331,6 +331,10 @@ async function approvePinBatch(productIds: string[]): Promise<{ approved: number
     throw new AutomationError('dry_run_enabled', 'Turn off Developer dry run before approving live publication')
   }
   const completedToday = await repository.countPublicationsForDay(localDayKey())
+  const target = Math.min(settings.batchSize, settings.dailyLimit - completedToday)
+  if ((job.draftProductIds?.length ?? 0) < target) {
+    throw new AutomationError('batch_incomplete', `Batch baru ${job.draftProductIds?.length ?? 0}/${target} draft; lanjutkan pengumpulan sebelum persetujuan`)
+  }
   if (productIds.length > settings.dailyLimit - completedToday) {
     throw new AutomationError('daily_limit_exceeded', 'Selected Pins exceed the remaining daily publication quota')
   }
@@ -445,6 +449,14 @@ async function resumeFromCheckpoint(): Promise<void> {
     job.updatedAt = Date.now()
     await repository.saveJob(job)
     await clearRuntimePayload()
+  }
+  if (job.state === 'awaiting_approval' && (job.approvedProductIds?.length ?? 0) === 0) {
+    const settings = await loadSettings()
+    const completedToday = await repository.countPublicationsForDay(localDayKey())
+    if ((job.draftProductIds?.length ?? 0) < Math.min(settings.batchSize, settings.dailyLimit - completedToday)) {
+      await holdIncompleteBatch(job, 'Batch lama belum mencapai target setelah ekstensi diperbarui; draft tetap tersimpan.')
+      return
+    }
   }
   if (isTerminalOrPaused(job.state)) return
   if (job.state === 'await_publish_slot') {
@@ -561,7 +573,7 @@ async function discoverProducts(job: JobSnapshot): Promise<void> {
   }
   if (result.candidates.length === 0) {
     if ((job.draftProductIds?.length ?? 0) > 0) {
-      await transition(job, 'awaiting_approval', `${job.draftProductIds!.length} prepared drafts are ready for batch review`)
+      await holdIncompleteBatch(job, `Pemindaian ${result.pagesScanned} halaman tidak menemukan produk tambahan yang sesuai.`)
       return
     }
     const message = !diagnostics || diagnostics.productsRead === 0
@@ -587,7 +599,7 @@ async function selectCandidate(job: JobSnapshot): Promise<void> {
 
   const draftIds = job.draftProductIds ?? []
   if (draftIds.length >= Math.min(settings.batchSize, settings.dailyLimit - currentCount)) {
-    await transition(job, 'awaiting_approval', `${draftIds.length} Pin drafts ready for individual selection and one batch approval`)
+    await transition(job, 'awaiting_approval', `${draftIds.length} draft mencapai target; siap ditinjau dan disetujui bersama`)
     return
   }
 
@@ -600,7 +612,7 @@ async function selectCandidate(job: JobSnapshot): Promise<void> {
   }
   if (!selectedId) {
     if (draftIds.length > 0) {
-      await transition(job, 'awaiting_approval', `${draftIds.length} Pin drafts ready for batch review`)
+      await holdIncompleteBatch(job, 'Antrean produk yang ditemukan sudah habis sebelum target batch tercapai.')
       return
     }
     job.state = 'stopped'
@@ -612,6 +624,24 @@ async function selectCandidate(job: JobSnapshot): Promise<void> {
 
   job.activeProductId = selectedId
   await transition(job, 'extract_product', 'Selected the next eligible product')
+}
+
+async function holdIncompleteBatch(job: JobSnapshot, reason: string): Promise<void> {
+  const settings = await loadSettings()
+  job.completedToday = await repository.countPublicationsForDay(localDayKey())
+  const target = Math.min(settings.batchSize, settings.dailyLimit - job.completedToday)
+  if (target <= 0) {
+    await transition(job, 'daily_limit_reached', 'Batas terbit hari ini sudah tercapai; draft tersimpan.')
+    return
+  }
+
+  job.pausedFrom = 'discover_products'
+  job.queueProductIds = []
+  delete job.activeProductId
+  await chrome.alarms.clear(RUN_ALARM)
+  await clearRuntimePayload()
+  await transition(job, 'paused', `${job.draftProductIds?.length ?? 0}/${target} draft terkumpul; menunggu produk tambahan.`)
+  await log('warning', 'paused', reason)
 }
 
 async function extractProduct(job: JobSnapshot): Promise<void> {
@@ -882,11 +912,8 @@ async function handleWorkflowError(error: unknown): Promise<void> {
   }
 
   if ((job.draftProductIds?.length ?? 0) > 0 && (job.approvedProductIds?.length ?? 0) === 0
-    && ['discover_products', 'select_candidate'].includes(job.state)) {
-    job.state = 'awaiting_approval'
-    job.updatedAt = Date.now()
-    await repository.saveJob(job)
-    await updateStatus('awaiting_approval', `${job.draftProductIds!.length} prepared drafts ready despite a source error`, job.completedToday)
+    && ['preflight', 'research_due_check', 'discover_products', 'select_candidate'].includes(job.state)) {
+    await holdIncompleteBatch(job, `Sumber produk terhenti: ${normalized.message}`)
     return
   }
 

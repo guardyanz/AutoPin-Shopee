@@ -79,6 +79,7 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
    produk bersifat opsional: setiap kata harus ada pada judul produk. Untuk tema
    Board yang sempit, pakai kategori dan kata kunci bersamaan; untuk tema luas,
    cukup kategori. Isi tag pelacakan opsional, dipisahkan koma, bila perlu.
+   Pastikan **Pin per batch** diisi `100` bila ingin mengumpulkan 100 draft.
 7. Biarkan **Developer dry run** aktif untuk percobaan pertama.
 8. Klik **Mulai**. Setelah draft batch siap, poster, copy, Board, dan link
    tampak pada galeri review. Klik **Pilih semua Pin** untuk memilih seluruh draft
@@ -93,6 +94,15 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
    dipublikasikan langsung berurutan dengan jeda sekitar 10 detik.
    Jika batch lama masih menunggu jadwal berjam-jam, klik **Terbitkan sisa sekarang**.
    Lihat hasilnya di **Pin terbaru** dan **Aktivitas**.
+
+Persetujuan batch baru muncul setelah jumlah draft mencapai target **Pin per
+batch**, dibatasi jatah terbit hari itu. Jika antrean produk dari halaman yang
+dipindai habis lebih dulu, PinShop menyimpan draft dan menjeda pengumpulan;
+tidak meminta persetujuan untuk satu-dua draft. Tambah **Halaman dipindai**
+(maksimal 10), atau sesuaikan kategori/kata kunci, lalu klik **Lanjutkan**.
+Periksa **Aktivitas** untuk melihat jumlah produk terbaca, yang lolos filter,
+dan kegagalan tautan afiliasi. Misalnya jika 10 Pin sudah terbit hari ini,
+target maksimum yang dapat disetujui hari itu adalah 90 Pin, bukan 100.
 
 Jika menggunakan token Trial sementara, periksa masa berlakunya sebelum batch
 dimulai; token yang kedaluwarsa akan menghentikan posting sampai diganti.

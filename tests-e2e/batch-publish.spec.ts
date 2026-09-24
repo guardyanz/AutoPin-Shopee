@@ -47,6 +47,7 @@ test('one explicit batch approval posts each selected draft through Pinterest AP
       settings.pinterestAccessToken = 'pina_batch_browser_test'
       settings.pinterestBoardId = '123'
       settings.boardName = 'SHOPEE'
+      settings.batchSize = 2
       settings.developerDryRun = false
       await chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings })
 
@@ -239,7 +240,86 @@ test('a 100-Pin review can be selected and confirmed without opening drafts indi
   }
 })
 
-test('an unpublished Pin from an older job is moved into batch review after extension reload', async () => {
+test('a partial draft batch waits for more products instead of requesting approval', async () => {
+  const profilePath = await mkdtemp(resolve(tmpdir(), 'pinshop-partial-batch-'))
+  const extensionPath = resolve('dist')
+  let context: BrowserContext | undefined
+  try {
+    context = await chromium.launchPersistentContext(profilePath, {
+      executablePath: findChromiumExecutable(), headless: false, viewport: { width: 390, height: 844 },
+      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`, '--no-first-run', '--no-default-browser-check'],
+    })
+    let [worker] = context.serviceWorkers()
+    worker ??= await context.waitForEvent('serviceworker')
+    await expect.poll(() => worker.evaluate(() => typeof chrome)).toBe('object')
+    const extensionId = new URL(worker.url()).host
+    const page = await context.newPage()
+    await page.goto(`chrome-extension://${extensionId}/src/sidepanel/index.html`)
+    await expect.poll(() => page.evaluate(async () => Boolean((await chrome.storage.local.get('automationSettings')).automationSettings))).toBe(true)
+    await page.evaluate(async () => {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' })
+      const settings = response.data
+      settings.batchSize = 100
+      await chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings })
+
+      const db = await new Promise<IDBDatabase>((resolveDb, rejectDb) => {
+        const request = indexedDB.open('autopin-shopee', 3)
+        request.onsuccess = () => resolveDb(request.result)
+        request.onerror = () => rejectDb(request.error)
+      })
+      const transaction = db.transaction('jobs', 'readwrite')
+      transaction.objectStore('jobs').put({
+        id: 'active', state: 'select_candidate', queueProductIds: ['sku-1'], draftProductIds: ['sku-1'],
+        reviewedProductIds: [], approvedProductIds: [], scheduledSlots: [], nextSlotIndex: 0,
+        completedToday: 0, consecutiveFailures: 0, updatedAt: Date.now(),
+      })
+      await new Promise<void>((resolveTx, rejectTx) => {
+        transaction.oncomplete = () => resolveTx()
+        transaction.onerror = () => rejectTx(transaction.error)
+      })
+      db.close()
+    })
+    await page.reload()
+    await worker.evaluate(() => chrome.alarms.create('affiliate-pin-run', { when: Date.now() + 250 }))
+    await expect.poll(() => page.evaluate(async () => {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_DASHBOARD' })
+      return response.data.status.state
+    }), { timeout: 10_000 }).toBe('paused')
+    await page.getByRole('button', { name: 'Muat ulang status' }).click()
+    await expect(page.locator('#dashboard-title')).toContainText('1/100')
+    await expect(page.locator('#next-action')).toHaveText('Tambah halaman/filter, lalu Lanjutkan')
+    await expect(page.getByRole('button', { name: /Setujui .* Pin pilihan/ })).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Lanjutkan' })).toBeEnabled()
+    await page.screenshot({ path: 'artifacts/partial-batch.png', fullPage: true })
+    const bypassAttempt = await page.evaluate(async () => {
+      const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' })
+      const settings = response.data
+      settings.developerDryRun = false
+      await chrome.runtime.sendMessage({ type: 'SAVE_SETTINGS', settings })
+      const db = await new Promise<IDBDatabase>((resolveDb, rejectDb) => {
+        const request = indexedDB.open('autopin-shopee', 3)
+        request.onsuccess = () => resolveDb(request.result)
+        request.onerror = () => rejectDb(request.error)
+      })
+      const transaction = db.transaction('jobs', 'readwrite')
+      const store = transaction.objectStore('jobs')
+      const job = await new Promise<Record<string, unknown>>((resolveJob) => {
+        const request = store.get('active')
+        request.onsuccess = () => resolveJob(request.result)
+      })
+      store.put({ ...job, state: 'awaiting_approval' })
+      await new Promise<void>((resolveTx) => { transaction.oncomplete = () => resolveTx() })
+      db.close()
+      return chrome.runtime.sendMessage({ type: 'APPROVE_PIN_BATCH', productIds: ['sku-1'] })
+    })
+    expect(bypassAttempt).toMatchObject({ ok: false, error: { code: 'batch_incomplete' } })
+  } finally {
+    await context?.close()
+    await rm(profilePath, { recursive: true, force: true })
+  }
+})
+
+test('an unpublished Pin from an older job remains saved until the batch target is met', async () => {
   const profilePath = await mkdtemp(resolve(tmpdir(), 'autopin-shopee-migration-'))
   const extensionPath = resolve('dist')
   let context: BrowserContext | undefined
@@ -300,7 +380,19 @@ test('an unpublished Pin from an older job is moved into batch review after exte
     await expect.poll(() => reloadedPage.evaluate(async () => {
       const response = await chrome.runtime.sendMessage({ type: 'GET_DASHBOARD' }).catch(() => null)
       return response?.data ? { state: response.data.status.state, reviews: response.data.reviews.length } : null
-    }), { timeout: 15_000 }).toEqual({ state: 'awaiting_approval', reviews: 1 })
+    }), { timeout: 15_000 }).toEqual({ state: 'paused', reviews: 0 })
+    await expect(reloadedPage.locator('#dashboard-title')).toContainText('1/10')
+    await expect.poll(() => reloadedPage.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolveDb, rejectDb) => {
+        const request = indexedDB.open('autopin-shopee', 3)
+        request.onsuccess = () => resolveDb(request.result)
+        request.onerror = () => rejectDb(request.error)
+      })
+      const request = db.transaction('drafts', 'readonly').objectStore('drafts').get('legacy-sku')
+      const draft = await new Promise<unknown>((resolveDraft) => { request.onsuccess = () => resolveDraft(request.result) })
+      db.close()
+      return Boolean(draft)
+    })).toBe(true)
   } finally {
     await context?.close()
     await rm(profilePath, { recursive: true, force: true })

@@ -138,7 +138,9 @@ function renderDashboard(data: DashboardData): void {
   element('quota-limit').textContent = `/ ${status.dailyLimit}`
   element<HTMLElement>('quota-progress').style.width = `${Math.min(100, status.completedToday / status.dailyLimit * 100)}%`
   element('current-product').textContent = status.activeProductTitle || 'Belum ada produk'
-  element('next-action').textContent = status.nextRunAt ? formatFuture(status.nextRunAt) : 'Belum dijadwalkan'
+  element('next-action').textContent = status.state === 'paused' && status.message.includes('draft terkumpul')
+    ? 'Tambah halaman/filter, lalu Lanjutkan'
+    : status.nextRunAt ? formatFuture(status.nextRunAt) : 'Belum dijadwalkan'
   element('updated-at').textContent = `Diperbarui ${formatTime(status.updatedAt)}`
 
   const dot = element('status-dot')
@@ -484,7 +486,7 @@ function renderSettings(): void {
   element<HTMLInputElement>('batch-size').value = String(settings.batchSize)
   element<HTMLInputElement>('product-category').value = settings.productCategory
   element<HTMLInputElement>('product-keywords').value = settings.productKeywords
-  element('source-filter-summary').textContent = `Sumber: ${settings.productCategory || 'semua kategori'}${settings.productKeywords ? ` · judul memuat "${settings.productKeywords}"` : ''}`
+  element('source-filter-summary').textContent = `Sumber: ${settings.productCategory || 'semua kategori'}${settings.productKeywords ? ` · judul memuat "${settings.productKeywords}"` : ''} · target ${settings.batchSize} Pin`
   element<HTMLInputElement>('affiliate-tags').value = settings.affiliateTags.join(', ')
   element<HTMLInputElement>('dry-run').checked = settings.developerDryRun
   element('pinterest-connection-state').textContent = settings.pinterestAccessToken ? 'Terhubung / token tersedia' : 'Belum terhubung'
