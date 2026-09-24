@@ -121,9 +121,14 @@ dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .review-note { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
 .batch-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
 .batch-list li { display: grid; grid-template-columns: minmax(0, 1fr) 38px; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-.batch-preview { min-height: 44px; width: 100%; display: grid; gap: 2px; padding: 4px; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.batch-preview { min-height: 44px; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.batch-preview-copy { min-width: 0; display: grid; gap: 2px; }
+.batch-preview-action { flex: none; padding: 5px 7px; border: 1px solid var(--cyan); border-radius: 6px; color: var(--cyan); font-size: 11px; font-weight: 700; }
+.batch-preview:hover .batch-preview-action { color: #fff; background: var(--cyan); }
 .batch-preview strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .batch-preview small { color: var(--muted); }
+.review-feedback { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.review-feedback.is-error { color: #9b352c; }
 .batch-list input[type="checkbox"] { width: 20px; height: 20px; margin: auto; accent-color: var(--cyan); }
 .batch-preview:focus-visible, .batch-list input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .button, .icon-button {

@@ -82,7 +82,7 @@ function bindControls(): void {
   element<HTMLButtonElement>('resume-button').addEventListener('click', () => void runCommand({ type: 'RESUME_AUTOMATION' }, 'Automation resumed'))
   element<HTMLButtonElement>('approve-button').addEventListener('click', () => void approvePinBatch())
   element<HTMLButtonElement>('save-review').addEventListener('click', () => void savePinReview(true))
-  element<HTMLButtonElement>('stop-button').addEventListener('click', () => void runCommand({ type: 'STOP_AUTOMATION' }, 'Automation stopped'))
+  element<HTMLButtonElement>('stop-button').addEventListener('click', () => void stopAutomationWithConfirmation())
 }
 
 function bindSettings(): void {
@@ -159,12 +159,18 @@ function renderBatchReview(reviews: PinReviewData[]): void {
     const preview = document.createElement('button')
     preview.type = 'button'
     preview.className = 'batch-preview'
-    preview.setAttribute('aria-label', `Preview ${review.productTitle}`)
+    preview.setAttribute('aria-label', `Tinjau ${review.productTitle}`)
+    const copy = document.createElement('span')
+    copy.className = 'batch-preview-copy'
     const title = document.createElement('strong')
     title.textContent = review.productTitle
     const status = document.createElement('small')
     status.textContent = review.reviewed ? 'Sudah dibuka · pilih jika setuju' : 'Buka preview terlebih dahulu'
-    preview.append(title, status)
+    const action = document.createElement('span')
+    action.className = 'batch-preview-action'
+    action.textContent = 'Tinjau'
+    copy.append(title, status)
+    preview.append(copy, action)
     preview.addEventListener('click', () => void openDraftPreview(review.productId))
     const checkbox = document.createElement('input')
     checkbox.type = 'checkbox'
@@ -187,6 +193,10 @@ function renderBatchReview(reviews: PinReviewData[]): void {
 }
 
 async function openDraftPreview(productId: string): Promise<void> {
+  const feedback = element<HTMLElement>('review-feedback')
+  feedback.hidden = false
+  feedback.className = 'review-feedback'
+  feedback.textContent = 'Memuat preview Pin…'
   try {
     const draft = await sendMessage<PinDraft>({ type: 'GET_DRAFT_PREVIEW', productId })
     activeReviewId = productId
@@ -201,8 +211,13 @@ async function openDraftPreview(productId: string): Promise<void> {
     destination.textContent = draft.product.affiliateUrl ?? ''
     element('review-board').textContent = draft.boardLabel ? `${draft.boardLabel} · ${draft.boardId}` : draft.boardId
     await refreshDashboard(false)
+    feedback.hidden = true
+    element('draft-preview').scrollIntoView({ behavior: 'smooth', block: 'start' })
   } catch (error) {
-    showToast(messageFromError(error), true)
+    const message = messageFromError(error)
+    feedback.className = 'review-feedback is-error'
+    feedback.textContent = `Preview gagal dibuka: ${message}. Draft tetap tersimpan; coba Refresh status.`
+    showToast(message, true)
   }
 }
 
@@ -263,7 +278,7 @@ function renderActivity(activity: ActivityEntry[]): void {
 }
 
 function updateControlStates(state: string): void {
-  const running = !['idle', 'stopped', 'paused', 'awaiting_approval', 'daily_limit_reached', 'authentication_required', 'captcha_detected', 'circuit_open'].includes(state)
+  const running = !['idle', 'stopped', 'paused', 'daily_limit_reached', 'authentication_required', 'captcha_detected', 'circuit_open'].includes(state)
   element<HTMLButtonElement>('start-button').disabled = !['idle', 'stopped'].includes(state)
   element<HTMLButtonElement>('pause-button').disabled = !running
   element<HTMLButtonElement>('resume-button').disabled = !['paused', 'authentication_required', 'captcha_detected', 'circuit_open'].includes(state)
@@ -277,7 +292,13 @@ function updateApprovalButton(): void {
   const button = element<HTMLButtonElement>('approve-button')
   button.disabled = selectedProductIds.size === 0
   button.querySelector('span')!.textContent = `Approve ${selectedProductIds.size} selected Pins`
-  if (dashboard) element('batch-summary').textContent = `${dashboard.reviews.length} draft siap · ${selectedProductIds.size} dipilih. Buka preview lalu centang setiap Pin yang Anda setujui.`
+  if (dashboard) element('batch-summary').textContent = `${dashboard.reviews.length} draft siap · ${selectedProductIds.size} dipilih. Klik Tinjau, lalu centang setiap Pin yang Anda setujui.`
+}
+
+async function stopAutomationWithConfirmation(): Promise<void> {
+  if (dashboard && ['awaiting_approval', 'paused'].includes(dashboard.status.state)
+    && !window.confirm('Stop akan membuang draft yang belum diterbitkan. Pilih Pause untuk menyimpan dan melanjutkan review nanti. Tetap Stop?')) return
+  await runCommand({ type: 'STOP_AUTOMATION' }, 'Automation stopped')
 }
 
 async function approvePinBatch(): Promise<void> {

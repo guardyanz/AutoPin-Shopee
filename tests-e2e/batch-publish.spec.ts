@@ -93,14 +93,25 @@ test('one explicit batch approval posts each selected draft through Pinterest AP
 
     await page.getByRole('button', { name: 'Refresh status' }).click()
     await expect(page.locator('#batch-list li')).toHaveCount(2)
+    await expect(page.getByRole('button', { name: 'Pause' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Tinjau Lampu 1' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Tinjau Lampu 2' })).toBeVisible()
+    page.once('dialog', (dialog) => void dialog.dismiss())
+    await page.getByRole('button', { name: 'Stop automation' }).click()
+    await expect(page.locator('#batch-list li')).toHaveCount(2)
     const first = page.getByRole('checkbox', { name: 'Pilih Pin Lampu 1 untuk diterbitkan' })
     const second = page.getByRole('checkbox', { name: 'Pilih Pin Lampu 2 untuk diterbitkan' })
     await expect(first).toBeDisabled()
     await expect(second).toBeDisabled()
-    await page.getByRole('button', { name: 'Preview Lampu 1' }).click()
+    await page.getByRole('button', { name: 'Pause' }).click()
+    await expect(page.locator('#status-state')).toHaveText('Paused')
+    await page.getByRole('button', { name: 'Resume' }).click()
+    await expect(page.locator('#batch-list li')).toHaveCount(2)
+    await page.getByRole('button', { name: 'Tinjau Lampu 1' }).click()
+    await expect(page.locator('#draft-preview')).toBeInViewport()
     await expect(first).toBeEnabled()
     await first.check()
-    await page.getByRole('button', { name: 'Preview Lampu 2' }).click()
+    await page.getByRole('button', { name: 'Tinjau Lampu 2' }).click()
     await expect(second).toBeEnabled()
     await second.check()
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
@@ -163,6 +174,10 @@ test('an unpublished Pin from an older job is moved into batch review after exte
     const extensionId = new URL(worker.url()).host
     const page = await context.newPage()
     await page.goto(`chrome-extension://${extensionId}/src/sidepanel/index.html`)
+    await expect.poll(() => page.evaluate(async () => {
+      const stored = await chrome.storage.local.get(['automationSettings', 'runtimeStatus'])
+      return Boolean(stored.automationSettings && stored.runtimeStatus)
+    })).toBe(true)
     const png = (await readFile(resolve('dist/icon-128.png'))).toString('base64')
     await page.evaluate(async (posterBase64) => {
       const db = await new Promise<IDBDatabase>((resolveDb, rejectDb) => {

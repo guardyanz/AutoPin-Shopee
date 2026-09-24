@@ -76,9 +76,11 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
 6. Tentukan jumlah halaman Shopee yang akan dipindai (1–10). Isi tag pelacakan
    opsional, dipisahkan koma, jika ingin melacak performa link di Shopee.
 7. Biarkan **Developer dry run** aktif untuk percobaan pertama.
-8. Klik **Start**. Setelah draft batch siap, buka preview setiap Pin untuk
-   memeriksa poster, copy, disclosure, Board, dan link. Centang Pin yang ingin
-   diterbitkan; tidak ada Pin yang terpilih otomatis.
+8. Klik **Start**. Setelah draft batch siap, klik **Tinjau** pada setiap produk
+   untuk membuka poster, copy, disclosure, Board, dan link. Centang Pin yang
+   ingin diterbitkan; tidak ada Pin yang terpilih otomatis. Gunakan **Pause**
+   bila ingin melanjutkan review nanti; draft tetap tersimpan. **Stop** akan
+   membuang draft yang belum diterbitkan setelah konfirmasi.
 9. Nonaktifkan dry run, lalu tekan **Approve selected Pins** satu kali. Hanya Pin
    yang dicentang akan dipublikasikan menurut jadwal 8–12 jam. Lihat hasilnya di
    **Recent pins** dan **Activity**.

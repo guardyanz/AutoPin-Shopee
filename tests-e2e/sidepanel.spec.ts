@@ -184,8 +184,9 @@ test('discovers Affiliate offers without ratings through the installed content s
           });
         </script></body></html>`,
     }))
-    let [worker] = context.serviceWorkers()
-    worker ??= await context.waitForEvent('serviceworker')
+    let worker = context.serviceWorkers().find((candidate) => candidate.url().startsWith('chrome-extension://'))
+    worker ??= await context.waitForEvent('serviceworker', { predicate: (candidate) => candidate.url().startsWith('chrome-extension://') })
+    await expect.poll(() => worker.evaluate(() => typeof chrome).catch(() => 'unavailable')).toBe('object')
     const page = await context.newPage()
     await page.goto(affiliateUrl)
     await expect.poll(() => worker.evaluate(async (url) => {
