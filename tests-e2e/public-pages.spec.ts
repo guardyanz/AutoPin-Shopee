@@ -13,6 +13,8 @@ test('public app and policy pages are complete, linked, and responsive', async (
     })
 
     await page.goto(pathToFileURL(resolve('docs/index.html')).href)
+    await expect(page).toHaveTitle(/PinShop/)
+    await expect.poll(() => page.locator('.brand img').evaluate((image: HTMLImageElement) => image.naturalWidth > 0)).toBe(true)
     await expect(page.getByRole('heading', { name: 'From selected products to approved Pins.' })).toBeVisible()
     await expect(page.getByText('No Pinterest passwords, session cookies, engagement automation, or Pinterest scraping.')).toBeVisible()
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)

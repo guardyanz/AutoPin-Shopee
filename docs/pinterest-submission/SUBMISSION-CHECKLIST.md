@@ -27,7 +27,7 @@
 - [ ] Request only `boards:read boards:write pins:read pins:write`.
 - [ ] Test OAuth state mismatch, denial, expiry, and token refresh.
 - [ ] Test `GET /v5/boards`, optional `POST /v5/boards`, `POST /v5/pins`, and `GET /v5/pins/{id}` in Sandbox.
-- [ ] Confirm every Pin is displayed and individually selected before one batch confirmation; no Pin is preselected.
+- [ ] Confirm every Pin is displayed, no Pin is preselected, and the owner selects all or a subset before one batch confirmation.
 - [ ] Confirm ambiguous Create Pin responses are not automatically retried.
 - [ ] Confirm disconnect and local data deletion.
 - [ ] Re-run dependency audit and secret scan.
@@ -37,7 +37,7 @@
 - [ ] Trial access is approved and the app complies with current Developer Guidelines.
 - [ ] Live OAuth and Pinterest API integration are working.
 - [ ] Record the video using `STANDARD-ACCESS-VIDEO-SCRIPT.md`.
-- [ ] Video shows OAuth, requested scopes, individually reviewed/selected Pins, one batch confirmation, live API result, and disconnect.
+- [ ] Video shows OAuth, requested scopes, batch review and selection, one batch confirmation, live API result, and disconnect.
 - [ ] Video contains no secrets or unrelated personal data.
 - [ ] Submitted description, Privacy Policy, video narration, and product behaviour agree.
 - [ ] Upload the demo from the app's **Upgrade** flow and submit.
@@ -45,7 +45,7 @@
 ## Do not submit Standard access while any item below is true
 
 - Pinterest production still uses DOM clicking or session-cookie automation.
-- A batch can publish without the owner reviewing each Pin.
+- A batch can publish without the owner seeing the batch review and confirming the selected list.
 - The OAuth consent screen is missing from the video.
 - The Privacy Policy URL is not publicly accessible.
 - The app stores or logs Pinterest credentials in plaintext or source control.

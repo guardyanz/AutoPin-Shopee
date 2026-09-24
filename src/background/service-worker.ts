@@ -153,7 +153,7 @@ async function connectPinterest(): Promise<{ connected: true }> {
     environment: settings.pinterestEnvironment,
   })
   const redirect = await chrome.identity.launchWebAuthFlow({ url: start.authorization_url, interactive: true })
-  if (!redirect) throw new AutomationError('oauth_cancelled', 'Pinterest OAuth did not return to AutoPin Shopee')
+  if (!redirect) throw new AutomationError('oauth_cancelled', 'Pinterest OAuth did not return to PinShop')
   const result = new URL(redirect)
   if (result.searchParams.has('error')) throw new AutomationError('oauth_denied', 'Pinterest access was denied')
   const ticket = result.searchParams.get('ticket') ?? ''
@@ -318,7 +318,7 @@ async function approvePinBatch(productIds: string[]): Promise<{ approved: number
   const job = await requireJob()
   if (job.state !== 'awaiting_approval') throw new AutomationError('batch_not_awaiting_approval', 'No Pin batch is waiting for approval')
   if (productIds.length === 0 || new Set(productIds).size !== productIds.length) {
-    throw new AutomationError('batch_selection_invalid', 'Select each Pin to publish once; no Pin is selected by default')
+    throw new AutomationError('batch_selection_invalid', 'Select at least one Pin; each Pin can appear only once in the batch')
   }
   if (productIds.some((id) => !(job.draftProductIds ?? []).includes(id))) {
     throw new AutomationError('batch_selection_invalid', 'Every selected Pin must belong to the displayed draft batch')
@@ -346,7 +346,7 @@ async function approvePinBatch(productIds: string[]): Promise<{ approved: number
   job.nextSlotIndex = 0
   await activateApprovedDraft(job, productIds[0])
   await transition(job, 'await_publish_slot', `You selected ${productIds.length} Pins; publishing this batch now`)
-  await log('success', 'await_publish_slot', `Explicit batch approval recorded for ${productIds.length} individually selected Pins`)
+  await log('success', 'await_publish_slot', `Explicit batch approval recorded for ${productIds.length} selected Pins`)
   void runAdvance()
   return { approved: productIds.length }
 }
@@ -1156,7 +1156,7 @@ async function notifySafetyStop(message: string): Promise<void> {
   await chrome.notifications.create({
     type: 'basic',
     iconUrl: 'icon-128.png',
-    title: 'AutoPin Shopee paused',
+    title: 'PinShop dijeda',
     message,
   })
 }

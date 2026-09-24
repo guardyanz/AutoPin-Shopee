@@ -76,7 +76,7 @@ async function enrichAffiliateLinks(
     } catch (error) {
       diagnostics.affiliateLinkFailures += 1
       diagnostics.lastAffiliateError = normalizeError(error)
-      console.warn('[AutoPin Shopee] Skipping product without an affiliate link', candidate.id, error)
+      console.warn('[PinShop] Skipping product without an affiliate link', candidate.id, error)
     }
   }
   return enriched

@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "AutoPin Shopee",
-  "short_name": "AutoPin Shopee",
+  "name": "PinShop",
+  "short_name": "PinShop",
   "version": "1.0.0",
   "minimum_chrome_version": "116",
-  "description": "Siapkan produk Shopee Affiliate, review setiap Pin, lalu publikasikan melalui Pinterest API v5.",
+  "description": "Siapkan produk Shopee Affiliate, tinjau satu batch Pin, lalu publikasikan melalui Pinterest API v5.",
   "icons": {
     "16": "icon-16.png",
     "48": "icon-48.png",
@@ -39,7 +39,7 @@
     "default_path": "src/sidepanel/index.html"
   },
   "action": {
-    "default_title": "Buka AutoPin Shopee",
+    "default_title": "Buka PinShop",
     "default_icon": {
       "16": "icon-16.png",
       "48": "icon-48.png"

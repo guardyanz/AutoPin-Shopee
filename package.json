@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "npm run build && node node_modules/@playwright/test/cli.js test --config playwright.config.ts",
+    "assets:brand": "node scripts/render-pinshop-assets.mjs",
     "assets:submission": "node scripts/render-submission-assets.mjs"
   },
   "dependencies": {

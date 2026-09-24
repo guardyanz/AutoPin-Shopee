@@ -1,6 +1,6 @@
-# AutoPin Shopee
+# PinShop
 
-AutoPin Shopee adalah ekstensi Chrome Manifest V3 yang menghubungkan alur
+PinShop adalah ekstensi Chrome Manifest V3 yang menghubungkan alur
 **Shopee Affiliate → Pinterest**. Produk diambil dari halaman penawaran Shopee,
 shortlink affiliate resmi dibuat dari sesi pengguna, materi Pin disiapkan, lalu
 setiap Pin ditampilkan dan dipilih pengguna dalam review batch sebelum dipublikasikan melalui Pinterest API v5.
@@ -44,7 +44,7 @@ Shopee Affiliate pages
   → local publication history
 ```
 
-AutoPin Shopee tidak mengumpulkan password atau session cookie Pinterest, tidak
+PinShop tidak mengumpulkan password atau session cookie Pinterest, tidak
 melakukan scraping Pinterest, dan tidak mempunyai content script Pinterest.
 
 ## Build dan instalasi
@@ -66,14 +66,14 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
 
 ## Konfigurasi dan penggunaan
 
-1. Buka side panel **AutoPin Shopee**.
-2. Di tab **Pengaturan**, pilih penyedia AI dan isi API key.
+1. Buka side panel **PinShop**.
+2. Di tab **Pengaturan**, buka bagian **AI & model**, pilih penyedia AI dan isi API key.
 3. Klik **Muat model**, pilih model utama, dan simpan.
-4. Pilih environment yang menerbitkan token Pinterest Anda: token Sandbox untuk
+4. Buka bagian **Pinterest & Board**, lalu pilih environment yang menerbitkan token Pinterest Anda: token Sandbox untuk
    **Sandbox**, atau product-limited Trial/Standard token untuk **Production**.
 5. Klik **Muat Board dari Pinterest**, lalu pilih Board dari daftar. Untuk membuat
    Board baru, isi nama/deskripsi dan klik **Buat Board melalui API**.
-6. Tentukan jumlah halaman Shopee yang akan dipindai (1–10), ukuran batch
+6. Bagian **Produk & batch** sudah terbuka. Tentukan jumlah halaman Shopee yang akan dipindai (1–10), ukuran batch
    (1–100), serta tab kategori Shopee. Klik **Muat kategori** saat halaman
    Penawaran Produk terbuka, kemudian pilih nama tab yang tersedia. Kata kunci
    produk bersifat opsional: setiap kata harus ada pada judul produk. Untuk tema
@@ -127,7 +127,7 @@ tiga kegagalan produk berturut-turut. Selesaikan tindakan manual yang diperlukan
 periksa tab **Aktivitas**, lalu pilih **Lanjutkan**.
 
 Jika skrip ekstensi belum terpasang pada tab Shopee Affiliate setelah ekstensi
-di-reload, AutoPin memuat ulang tab tersebut dan mencoba menghubungkannya kembali.
+di-reload, PinShop memuat ulang tab tersebut dan mencoba menghubungkannya kembali.
 Jika koneksi tetap gagal, Dashboard menampilkan pesan aslinya; muat ulang tab
 Shopee Affiliate secara manual dan klik **Mulai** lagi.
 
@@ -150,12 +150,12 @@ melalui environment variable `PLAYWRIGHT_CHROMIUM_EXECUTABLE`.
 
 ## Sumber dan lisensi
 
-AutoPin Shopee merupakan repository baru, bukan perubahan langsung pada kedua
+PinShop merupakan repository baru, bukan perubahan langsung pada kedua
 repository sumber. Atribusi lengkap tersedia di [NOTICE.md](NOTICE.md).
 
 - ShopiThread: MIT, copyright (c) 2026 Sodikin (sodikinnaa).
 - PinterestBulkPostBot: MIT, copyright (c) 2022 Enzo Day.
-- AutoPin Shopee: MIT, lihat [LICENSE](LICENSE).
+- PinShop: MIT, lihat [LICENSE](LICENSE).
 
-AutoPin Shopee adalah proyek independen dan tidak berafiliasi dengan Shopee atau
+PinShop adalah proyek independen dan tidak berafiliasi dengan Shopee atau
 Pinterest.

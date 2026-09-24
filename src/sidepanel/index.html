@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AutoPin Shopee</title>
+    <title>PinShop</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <header class="app-header">
-      <div class="brand-mark" aria-hidden="true"><i data-lucide="workflow"></i></div>
+      <img class="brand-mark" src="../../pinshop-mark.svg" alt="" />
       <div class="brand-copy">
-        <strong>AutoPin Shopee</strong>
+        <strong>PinShop</strong>
         <span id="connection-label">Shopee Affiliate → Pinterest</span>
       </div>
       <button class="icon-button" id="refresh-dashboard" type="button" title="Muat ulang status" aria-label="Muat ulang status">
@@ -144,6 +144,9 @@
         </div>
 
         <form id="settings-form">
+          <details class="settings-section" id="ai-settings">
+            <summary><span class="settings-section-number">01</span><span class="settings-section-copy"><strong>AI &amp; model</strong><small>Penyedia, API key, dan model teks</small></span><span class="settings-section-chevron" aria-hidden="true"></span></summary>
+            <div class="settings-section-body">
           <fieldset class="field-group">
             <legend>Penyedia AI</legend>
             <div class="segmented-control" id="provider-segments">
@@ -175,7 +178,12 @@
             <label for="fallback-model">Model cadangan</label>
             <select id="fallback-model"><option value="">Tanpa cadangan</option></select>
           </div>
+            </div>
+          </details>
 
+          <details class="settings-section" id="pinterest-settings">
+            <summary><span class="settings-section-number">02</span><span class="settings-section-copy"><strong>Pinterest &amp; Board</strong><small>Akun, token, dan tujuan Pin</small></span><span class="settings-section-chevron" aria-hidden="true"></span></summary>
+            <div class="settings-section-body">
           <div class="field-group">
             <label for="pinterest-environment">Lingkungan Pinterest API</label>
             <select id="pinterest-environment">
@@ -222,14 +230,12 @@
           </div>
 
           <button class="button button-full" id="create-board" type="button"><i data-lucide="workflow"></i><span>Buat Board melalui API</span></button>
+            </div>
+          </details>
 
-          <div class="settings-divider"><h2>Produk Shopee &amp; batch</h2><p>Atur sumber sesuai tema Board sebelum memulai batch baru.</p></div>
-
-          <div class="field-group">
-            <label for="batch-size">Jumlah Pin per batch</label>
-            <input id="batch-size" type="number" min="1" max="100" step="1" required />
-            <small>1 sampai 100 draft. Pembuatan poster memakai layanan AI yang Anda pilih.</small>
-          </div>
+          <details class="settings-section" id="source-settings" open>
+            <summary><span class="settings-section-number">03</span><span class="settings-section-copy"><strong>Produk &amp; batch</strong><small>Filter produk sesuai tema Board</small></span><span class="settings-section-chevron" aria-hidden="true"></span></summary>
+            <div class="settings-section-body">
 
           <div class="field-group">
             <label for="product-category">Tab kategori Shopee</label>
@@ -245,10 +251,17 @@
             <small>Opsional. Semua kata harus muncul di judul produk, urutannya bebas. Gabungkan dengan kategori untuk hasil lebih spesifik.</small>
           </div>
 
-          <div class="field-group">
-            <label for="discovery-pages">Halaman Shopee yang dipindai</label>
-            <input id="discovery-pages" type="number" min="1" max="10" step="1" />
+          <div class="settings-field-pair">
+            <div class="field-group">
+              <label for="batch-size">Pin per batch</label>
+              <input id="batch-size" type="number" min="1" max="100" step="1" required />
+            </div>
+            <div class="field-group">
+              <label for="discovery-pages">Halaman dipindai</label>
+              <input id="discovery-pages" type="number" min="1" max="10" step="1" />
+            </div>
           </div>
+          <p class="field-hint">Maksimal 100 draft per batch dan 10 halaman sumber.</p>
 
           <div class="field-group">
             <label for="affiliate-tags">Tag pelacakan link Shopee</label>
@@ -265,8 +278,12 @@
             <i data-lucide="shield-check"></i>
             <span><strong>Konfirmasi batch sebelum terbit</strong><small>#affiliate · maksimum 100 Pin per hari</small></span>
           </div>
+            </div>
+          </details>
 
-          <button class="button button-primary button-full" type="submit"><i data-lucide="save"></i><span>Simpan pengaturan</span></button>
+          <div class="settings-save-bar">
+            <button class="button button-primary button-full" type="submit"><i data-lucide="save"></i><span>Simpan pengaturan</span></button>
+          </div>
         </form>
       </section>
     </main>

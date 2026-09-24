@@ -19,7 +19,7 @@ Adobe Contributor credentials are not part of this repository.
 
 Drafts are gathered into one `awaiting_approval` batch. Every draft's poster,
 copy, destination, and Board appear in the batch review; full-size editing is
-optional. The owner individually selects Pins and confirms the selected set
+optional. The owner selects Pins, including with select all, and confirms the selected set
 once. Unselected drafts cannot reach `POST /v5/pins`. Newly approved Pins start
 publishing immediately in sequence with a 10-second gap, not a randomized
 multi-hour schedule. Existing scheduled batches are accelerated only when the
