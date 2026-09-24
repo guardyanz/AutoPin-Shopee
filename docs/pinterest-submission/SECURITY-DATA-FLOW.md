@@ -10,7 +10,7 @@ Owner selects Shopee Affiliate products
   → optional tracking tags are applied through Shopee's own affiliate-link form
   → optional AI provider receives selected product text to draft copy
   → extension renders original posters locally and stores draft batch locally
-  → owner opens every candidate preview and selects each Pin to publish
+  → every candidate poster and summary appears in batch review; owner selects each Pin to publish
   → owner confirms the selected batch once; unselected Pins are excluded
   → OAuth access token authorises Pinterest API v5 request
   → Pinterest creates Pin on owner's selected Board
@@ -25,7 +25,7 @@ Owner selects Shopee Affiliate products
 - Least-privilege scope set: Boards and Pins read/write only.
 - No Pinterest scraping or DOM automation in the API-approved production path.
 - No automated engagement actions.
-- No autonomous bulk action: each Pin must be previewed and individually selected before one batch confirmation.
+- No autonomous bulk action: each Pin is displayed and individually selected before one batch confirmation.
 - No Pinterest API data used in AI prompts, model training, benchmarking, or third-party advertising.
 - No cross-user data combination and no sale of data.
 - API responses are requested when needed instead of building a Pinterest-data warehouse.

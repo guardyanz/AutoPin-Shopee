@@ -37,7 +37,7 @@ Say:
 
 1. Prepare at least two Shopee Affiliate drafts.
 2. Show the generated affiliate links and original 1000 by 1500 creative.
-3. Open the preview for each draft and show title, description, `#affiliate`, alt text, destination link, and Board.
+3. Show the poster, title, description, `#affiliate`, destination link, and Board on each batch card. Open **Detail / Edit** on one draft to show the full poster and alt text.
 4. Change one field to demonstrate owner control.
 5. Show that no Pin is selected automatically; individually check the Pins to publish.
 
@@ -71,7 +71,7 @@ Say:
 - [ ] Official Pinterest OAuth consent screen is clearly visible.
 - [ ] No password, cookie, app secret, access token, or refresh token is visible.
 - [ ] Live API-created Pin is shown—not a wireframe or browser form automation.
-- [ ] The owner opens and individually selects every Pin in the approved batch; no draft is preselected.
+- [ ] Every Pin is visible in batch review, and the owner individually selects each approved Pin; no draft is preselected.
 - [ ] Privacy Policy URL is publicly accessible.
 - [ ] Disconnect/deletion path is shown.
 - [ ] The narration and app behaviour match the submitted form exactly.

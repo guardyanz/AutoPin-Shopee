@@ -16,6 +16,7 @@ export type ExtensionMessage =
   | { type: 'RESUME_AUTOMATION' }
   | { type: 'GET_DRAFT_PREVIEW'; productId: string }
   | { type: 'APPROVE_PIN_BATCH'; productIds: string[] }
+  | { type: 'PUBLISH_REMAINING_NOW' }
   | { type: 'UPDATE_PIN_DRAFT'; productId: string; title: string; description: string; altText: string }
   | { type: 'STOP_AUTOMATION' }
   | { type: 'SHOPEE_PREFLIGHT' }

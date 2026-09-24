@@ -2,7 +2,7 @@ import { validateGeneratedContent } from '../core/content-validation'
 import type { ShopeeDiscoveryResult } from '../adapters/shopee-pagination'
 import { buildPinGenerationPrompt, buildPinRepairPrompt } from '../core/prompt'
 import type { ExtensionMessage, MessageResponse } from '../core/messages'
-import { createDailySchedule, localDayKey } from '../core/scheduler'
+import { createImmediateSchedule, localDayKey } from '../core/scheduler'
 import { validateSettingsForStart, type AutomationSettings } from '../core/settings'
 import { nextConsecutiveFailureCount } from '../core/state-machine'
 import type { JobState, ProductCandidate, ProviderId } from '../core/types'
@@ -107,6 +107,8 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
       return getDraftPreview(message.productId)
     case 'APPROVE_PIN_BATCH':
       return approvePinBatch(message.productIds)
+    case 'PUBLISH_REMAINING_NOW':
+      return publishRemainingNow()
     case 'UPDATE_PIN_DRAFT':
       return updatePinDraft(message)
     case 'STOP_AUTOMATION':
@@ -299,8 +301,6 @@ async function getDraftPreview(productId: string): Promise<PinDraft> {
   if (!(job.draftProductIds ?? []).includes(productId)) throw new AutomationError('draft_not_in_batch', 'This Pin is not in the current batch')
   const draft = await repository.getDraft(productId)
   if (!draft) throw new AutomationError('draft_missing', 'The requested Pin draft could not be recovered')
-  job.reviewedProductIds = [...new Set([...(job.reviewedProductIds ?? []), productId])]
-  await repository.saveJob(job)
   return draft
 }
 
@@ -310,8 +310,8 @@ async function approvePinBatch(productIds: string[]): Promise<{ approved: number
   if (productIds.length === 0 || new Set(productIds).size !== productIds.length) {
     throw new AutomationError('batch_selection_invalid', 'Select each Pin to publish once; no Pin is selected by default')
   }
-  if (productIds.some((id) => !(job.draftProductIds ?? []).includes(id) || !(job.reviewedProductIds ?? []).includes(id))) {
-    throw new AutomationError('batch_selection_invalid', 'Every selected Pin must first be opened for review')
+  if (productIds.some((id) => !(job.draftProductIds ?? []).includes(id))) {
+    throw new AutomationError('batch_selection_invalid', 'Every selected Pin must belong to the displayed draft batch')
   }
   const settings = await loadSettings()
   if (settings.developerDryRun) {
@@ -327,24 +327,42 @@ async function approvePinBatch(productIds: string[]): Promise<{ approved: number
       throw new AutomationError('draft_invalid', 'A selected Pin is incomplete or its Board has changed; review the batch again')
     }
   }
-  const windowHours = randomInteger(settings.minimumWindowHours, settings.maximumWindowHours)
   job.completedToday = completedToday
   job.approvedProductIds = productIds
-  job.scheduledSlots = productIds.length === 1
-    ? [Date.now()]
-    : createDailySchedule({ startAt: Date.now(), windowHours, requestedCount: productIds.length, dailyCap: settings.dailyLimit, minSpacingMinutes: 20 })
+  job.scheduledSlots = createImmediateSchedule(Date.now(), productIds.length)
   job.nextSlotIndex = 0
   await activateApprovedDraft(job, productIds[0])
-  await transition(job, 'await_publish_slot', `You selected ${productIds.length} reviewed Pins; publication is scheduled`)
+  await transition(job, 'await_publish_slot', `You selected ${productIds.length} Pins; publishing this batch now`)
   await log('success', 'await_publish_slot', `Explicit batch approval recorded for ${productIds.length} individually selected Pins`)
   void runAdvance()
   return { approved: productIds.length }
 }
 
+async function publishRemainingNow(): Promise<{ remaining: number }> {
+  const job = await requireJob()
+  if (job.state !== 'await_publish_slot') {
+    throw new AutomationError('batch_not_waiting', 'No approved Pin batch is waiting for a publication slot')
+  }
+  const remaining = (job.approvedProductIds?.length ?? 0) - (job.nextSlotIndex ?? 0)
+  if (remaining < 1 || job.publishOutcomeAmbiguous) {
+    throw new AutomationError('batch_not_waiting', 'There are no safely resumable approved Pins to publish')
+  }
+  const slots = [...job.scheduledSlots]
+  slots.splice(job.nextSlotIndex ?? 0, remaining, ...createImmediateSchedule(Date.now(), remaining))
+  job.scheduledSlots = slots
+  job.updatedAt = Date.now()
+  await repository.saveJob(job)
+  await chrome.alarms.clear(RUN_ALARM)
+  await updateStatus('await_publish_slot', `Publishing ${remaining} remaining approved Pins now`, job.completedToday)
+  await log('info', 'await_publish_slot', `Owner moved ${remaining} remaining approved Pins from the old schedule to immediate publication`)
+  void runAdvance()
+  return { remaining }
+}
+
 async function updatePinDraft(message: Extract<ExtensionMessage, { type: 'UPDATE_PIN_DRAFT' }>): Promise<{ updated: true }> {
   const job = await requireJob()
   if (job.state !== 'awaiting_approval') throw new AutomationError('pin_not_awaiting_approval', 'No Pin draft is waiting for review')
-  if (!(job.reviewedProductIds ?? []).includes(message.productId)) throw new AutomationError('draft_not_reviewed', 'Open this Pin preview before editing it')
+  if (!(job.draftProductIds ?? []).includes(message.productId)) throw new AutomationError('draft_not_in_batch', 'This Pin is not in the current draft batch')
   const draft = await repository.getDraft(message.productId)
   if (!draft) throw new AutomationError('draft_missing', 'Pin draft content is missing')
   const title = message.title.trim()
@@ -684,7 +702,7 @@ async function awaitPublishSlot(job: JobSnapshot): Promise<boolean> {
   }
   if (slot > Date.now() + 1_000) {
     await chrome.alarms.create(RUN_ALARM, { when: slot })
-    await updateStatus('await_publish_slot', 'Waiting for the next randomized publication slot', job.completedToday, undefined, slot)
+    await updateStatus('await_publish_slot', 'Publishing the next approved Pin shortly', job.completedToday, undefined, slot)
     return true
   }
   await transition(job, 'fill_pinterest', 'Publication slot is active')
@@ -808,7 +826,7 @@ async function cleanupProduct(job: JobSnapshot): Promise<void> {
   const nextId = job.approvedProductIds?.[job.nextSlotIndex ?? 0]
   if (nextId && job.completedToday < settings.dailyLimit) {
     await activateApprovedDraft(job, nextId)
-    await transition(job, 'await_publish_slot', 'Waiting for the next approved Pin slot')
+    await transition(job, 'await_publish_slot', 'Continuing the approved batch')
   } else {
     for (const id of job.draftProductIds ?? []) await repository.deleteDraft(id)
     job.draftProductIds = []
@@ -1141,10 +1159,6 @@ function isAdapterMessage(message: ExtensionMessage): boolean {
 
 function isTerminalOrPaused(state: JobState): boolean {
   return ['awaiting_approval', 'paused', 'daily_limit_reached', 'authentication_required', 'captcha_detected', 'circuit_open', 'stopped'].includes(state)
-}
-
-function randomInteger(minimum: number, maximum: number): number {
-  return Math.floor(minimum + Math.random() * (maximum - minimum + 1))
 }
 
 class AutomationError extends Error {

@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDailySchedule, localDayKey } from '../src/core/scheduler'
+import { createDailySchedule, createImmediateSchedule, IMMEDIATE_PIN_SPACING_MS, localDayKey } from '../src/core/scheduler'
+
+describe('createImmediateSchedule', () => {
+  it('starts now and keeps approved Pins in one short sequential batch', () => {
+    const start = Date.now()
+    expect(createImmediateSchedule(start, 3)).toEqual([
+      start,
+      start + IMMEDIATE_PIN_SPACING_MS,
+      start + 2 * IMMEDIATE_PIN_SPACING_MS,
+    ])
+  })
+})
 
 describe('createDailySchedule', () => {
   it('creates sorted slots across the requested window and respects the daily cap', () => {

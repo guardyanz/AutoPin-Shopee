@@ -94,24 +94,22 @@ test('one explicit batch approval posts each selected draft through Pinterest AP
     await page.getByRole('button', { name: 'Refresh status' }).click()
     await expect(page.locator('#batch-list li')).toHaveCount(2)
     await expect(page.getByRole('button', { name: 'Pause' })).toBeEnabled()
-    await expect(page.getByRole('button', { name: 'Tinjau Lampu 1' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Tinjau Lampu 2' })).toBeVisible()
     page.once('dialog', (dialog) => void dialog.dismiss())
     await page.getByRole('button', { name: 'Stop automation' }).click()
     await expect(page.locator('#batch-list li')).toHaveCount(2)
     const first = page.getByRole('checkbox', { name: 'Pilih Pin Lampu 1 untuk diterbitkan' })
     const second = page.getByRole('checkbox', { name: 'Pilih Pin Lampu 2 untuk diterbitkan' })
-    await expect(first).toBeDisabled()
-    await expect(second).toBeDisabled()
+    await expect(first).toBeEnabled()
+    await expect(second).toBeEnabled()
+    await expect(first).not.toBeChecked()
+    await expect(second).not.toBeChecked()
+    await expect(page.locator('.batch-thumb')).toHaveCount(2)
     await page.getByRole('button', { name: 'Pause' }).click()
     await expect(page.locator('#status-state')).toHaveText('Paused')
     await page.getByRole('button', { name: 'Resume' }).click()
     await expect(page.locator('#batch-list li')).toHaveCount(2)
-    await page.getByRole('button', { name: 'Tinjau Lampu 1' }).click()
-    await expect(page.locator('#draft-preview')).toBeInViewport()
     await expect(first).toBeEnabled()
     await first.check()
-    await page.getByRole('button', { name: 'Tinjau Lampu 2' }).click()
     await expect(second).toBeEnabled()
     await second.check()
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
@@ -123,6 +121,9 @@ test('one explicit batch approval posts each selected draft through Pinterest AP
     const firstPin = await worker.evaluate(() => (Reflect.get(globalThis, '__testPins') as Array<{ body: Record<string, unknown> }>)[0])
     expect(firstPin.body).toMatchObject({ board_id: '123', link: 'https://s.shopee.co.id/tagged-1' })
     await expect.poll(() => page.evaluate(async () => (await chrome.storage.local.get('runtimeStatus')).runtimeStatus.state)).toBe('await_publish_slot')
+    await expect(page.getByRole('button', { name: 'Approve 2 selected Pins' })).toBeHidden()
+    const initialNextRunAt = await page.evaluate(async () => (await chrome.storage.local.get('runtimeStatus')).runtimeStatus.nextRunAt as number)
+    expect(initialNextRunAt - Date.now()).toBeLessThan(20_000)
 
     await page.evaluate(async () => {
       const db = await new Promise<IDBDatabase>((resolveDb, rejectDb) => {
@@ -138,7 +139,7 @@ test('one explicit batch approval posts each selected draft through Pinterest AP
         request.onerror = () => rejectJob(request.error)
       })
       const slots = job.scheduledSlots as number[]
-      slots[1] = Date.now() - 1_000
+      slots[1] = Date.now() + 3_600_000
       store.put(job)
       await new Promise<void>((resolveTx, rejectTx) => {
         transaction.oncomplete = () => resolveTx()
@@ -147,6 +148,10 @@ test('one explicit batch approval posts each selected draft through Pinterest AP
       db.close()
       await chrome.alarms.create('affiliate-pin-run', { when: Date.now() + 250 })
     })
+
+    await expect(page.getByRole('button', { name: 'Terbitkan sisa sekarang' })).toBeVisible()
+    page.once('dialog', (dialog) => void dialog.accept())
+    await page.getByRole('button', { name: 'Terbitkan sisa sekarang' }).click()
 
     await expect.poll(() => worker.evaluate(() => (Reflect.get(globalThis, '__testPins') as unknown[]).length), { timeout: 15_000 }).toBe(2)
     const secondPin = await worker.evaluate(() => (Reflect.get(globalThis, '__testPins') as Array<{ body: Record<string, unknown> }>)[1])

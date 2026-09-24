@@ -58,6 +58,7 @@
           <button class="button" id="pause-button" type="button"><i data-lucide="pause"></i><span>Pause</span></button>
           <button class="button" id="resume-button" type="button"><i data-lucide="rotate-ccw"></i><span>Resume</span></button>
           <button class="button button-primary approval-button" id="approve-button" type="button" hidden><i data-lucide="shield-check"></i><span>Approve selected Pins</span></button>
+          <button class="button button-primary publish-now-button" id="publish-now-button" type="button" hidden>Terbitkan sisa sekarang</button>
           <button class="icon-button icon-button-danger" id="stop-button" type="button" title="Stop automation" aria-label="Stop automation"><i data-lucide="square"></i></button>
         </div>
 
@@ -65,7 +66,7 @@
           <div class="section-heading">
             <div><span class="eyebrow">Batch review</span><h2 id="review-title">Pilih Pin yang akan dipublikasikan</h2></div>
           </div>
-          <p class="review-note" id="batch-summary">Klik Tinjau pada setiap produk, lalu centang Pin yang Anda pilih. Tidak ada Pin yang terpilih otomatis.</p>
+          <p class="review-note" id="batch-summary">Lihat gambar dan ringkasan setiap Pin, lalu centang yang Anda pilih. Tidak ada Pin yang terpilih otomatis.</p>
           <ul class="batch-list" id="batch-list" aria-label="Draft Pin untuk ditinjau"></ul>
           <p class="review-feedback" id="review-feedback" role="status" hidden></p>
           <div id="draft-preview" hidden>
@@ -89,7 +90,7 @@
             </dl>
             <button class="button button-full" id="save-review" type="button"><i data-lucide="save"></i><span>Save reviewed draft</span></button>
           </div>
-          <p class="review-note">Tinjau gambar, teks, #affiliate, tautan, Board, dan hak penggunaan setiap Pin. Satu konfirmasi menerbitkan hanya Pin yang Anda centang. Pin pertama terbit segera; sisanya dijadwalkan tersebar selama 8–12 jam dengan jarak minimal 20 menit.</p>
+          <p class="review-note">Periksa gambar, teks, #affiliate, tautan, Board, dan hak penggunaan setiap Pin. Satu konfirmasi menerbitkan hanya Pin yang Anda centang; batch diproses langsung berurutan dengan jeda sekitar 10 detik antar-Pin.</p>
         </section>
 
         <section class="section-block" aria-labelledby="pipeline-title">

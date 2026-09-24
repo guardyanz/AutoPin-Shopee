@@ -40,7 +40,6 @@ interface PinReviewData {
   destinationUrl: string
   boardId: string
   boardLabel: string
-  reviewed: boolean
 }
 
 const iconSet = { Download, Eye, EyeOff, Gauge, Link2, Logs, Pause, Play, PlugZap, RefreshCw, RotateCcw, Save, Settings2, ShieldCheck, Square, Unlink, Workflow }
@@ -49,6 +48,10 @@ let dashboard: DashboardData | null = null
 let toastTimer: number | undefined
 let activeReviewId = ''
 const selectedProductIds = new Set<string>()
+const batchDrafts = new Map<string, PinDraft>()
+const loadingDraftIds = new Set<string>()
+const failedDraftIds = new Set<string>()
+let renderedBatchKey = ''
 let pinterestBoards: PinterestBoard[] = []
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -81,6 +84,7 @@ function bindControls(): void {
   element<HTMLButtonElement>('pause-button').addEventListener('click', () => void runCommand({ type: 'PAUSE_AUTOMATION' }, 'Automation paused'))
   element<HTMLButtonElement>('resume-button').addEventListener('click', () => void runCommand({ type: 'RESUME_AUTOMATION' }, 'Automation resumed'))
   element<HTMLButtonElement>('approve-button').addEventListener('click', () => void approvePinBatch())
+  element<HTMLButtonElement>('publish-now-button').addEventListener('click', () => void publishRemainingNow())
   element<HTMLButtonElement>('save-review').addEventListener('click', () => void savePinReview(true))
   element<HTMLButtonElement>('stop-button').addEventListener('click', () => void stopAutomationWithConfirmation())
 }
@@ -110,6 +114,7 @@ function bindSettings(): void {
 
 async function refreshDashboard(showConfirmation: boolean): Promise<void> {
   try {
+    if (showConfirmation) failedDraftIds.clear()
     dashboard = await sendMessage<DashboardData>({ type: 'GET_DASHBOARD' })
     renderDashboard(dashboard)
     if (showConfirmation) showToast('Status refreshed')
@@ -147,49 +152,100 @@ function renderBatchReview(reviews: PinReviewData[]): void {
   if (reviews.length === 0) {
     activeReviewId = ''
     selectedProductIds.clear()
+    batchDrafts.clear()
+    loadingDraftIds.clear()
+    failedDraftIds.clear()
+    renderedBatchKey = ''
     element<HTMLElement>('draft-preview').hidden = true
     return
   }
   const available = new Set(reviews.map((review) => review.productId))
   for (const id of selectedProductIds) if (!available.has(id)) selectedProductIds.delete(id)
-  for (const review of reviews) if (!review.reviewed) selectedProductIds.delete(review.productId)
+  for (const id of batchDrafts.keys()) if (!available.has(id)) batchDrafts.delete(id)
+  for (const review of reviews) {
+    if (!batchDrafts.has(review.productId) && !loadingDraftIds.has(review.productId) && !failedDraftIds.has(review.productId)) {
+      void loadBatchDraft(review.productId)
+    }
+  }
+  const nextKey = reviews.map((review) => `${review.productId}:${batchDrafts.get(review.productId)?.content.pinTitle ?? ''}:${failedDraftIds.has(review.productId)}`).join('|')
   const list = element<HTMLUListElement>('batch-list')
-  list.replaceChildren(...reviews.map((review) => {
-    const item = document.createElement('li')
-    const preview = document.createElement('button')
-    preview.type = 'button'
-    preview.className = 'batch-preview'
-    preview.setAttribute('aria-label', `Tinjau ${review.productTitle}`)
-    const copy = document.createElement('span')
-    copy.className = 'batch-preview-copy'
-    const title = document.createElement('strong')
-    title.textContent = review.productTitle
-    const status = document.createElement('small')
-    status.textContent = review.reviewed ? 'Sudah dibuka · pilih jika setuju' : 'Buka preview terlebih dahulu'
-    const action = document.createElement('span')
-    action.className = 'batch-preview-action'
-    action.textContent = 'Tinjau'
-    copy.append(title, status)
-    preview.append(copy, action)
-    preview.addEventListener('click', () => void openDraftPreview(review.productId))
-    const checkbox = document.createElement('input')
-    checkbox.type = 'checkbox'
-    checkbox.disabled = !review.reviewed
-    checkbox.checked = selectedProductIds.has(review.productId)
-    checkbox.setAttribute('aria-label', `Pilih Pin ${review.productTitle} untuk diterbitkan`)
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) selectedProductIds.add(review.productId)
-      else selectedProductIds.delete(review.productId)
-      updateApprovalButton()
-    })
-    item.append(preview, checkbox)
-    return item
-  }))
+  if (nextKey !== renderedBatchKey) {
+    list.replaceChildren(...reviews.map(renderBatchCard))
+    renderedBatchKey = nextKey
+  }
   if (activeReviewId && !available.has(activeReviewId)) {
     activeReviewId = ''
     element<HTMLElement>('draft-preview').hidden = true
   }
   updateApprovalButton()
+}
+
+function renderBatchCard(review: PinReviewData): HTMLLIElement {
+  const item = document.createElement('li')
+  const draft = batchDrafts.get(review.productId)
+  const thumb = draft ? document.createElement('img') : document.createElement('div')
+  if (thumb instanceof HTMLImageElement) {
+    thumb.className = 'batch-thumb'
+    thumb.src = draft!.posterDataUrl
+    thumb.alt = `Poster Pin ${review.productTitle}`
+  } else {
+    thumb.className = 'batch-thumb-placeholder'
+    thumb.textContent = failedDraftIds.has(review.productId) ? 'Gagal memuat' : 'Memuat gambar'
+  }
+
+  const copy = document.createElement('div')
+  copy.className = 'batch-card-copy'
+  const title = document.createElement('strong')
+  title.textContent = draft?.content.pinTitle ?? review.title
+  const description = document.createElement('p')
+  description.textContent = draft?.content.pinDescription ?? 'Memuat ringkasan Pin…'
+  const board = document.createElement('small')
+  board.textContent = `Board: ${review.boardLabel || review.boardId}`
+  const destination = document.createElement('a')
+  destination.href = review.destinationUrl
+  destination.textContent = review.destinationUrl
+  destination.title = review.destinationUrl
+  destination.target = '_blank'
+  destination.rel = 'noreferrer'
+  const detail = document.createElement('button')
+  detail.type = 'button'
+  detail.className = 'batch-detail'
+  detail.textContent = 'Detail / Edit'
+  detail.setAttribute('aria-label', `Detail atau edit ${review.productTitle}`)
+  detail.addEventListener('click', () => void openDraftPreview(review.productId))
+  copy.append(title, description, board, destination, detail)
+
+  const checkbox = document.createElement('input')
+  checkbox.type = 'checkbox'
+  checkbox.disabled = !draft
+  checkbox.checked = selectedProductIds.has(review.productId)
+  checkbox.setAttribute('aria-label', `Pilih Pin ${review.productTitle} untuk diterbitkan`)
+  checkbox.addEventListener('change', () => {
+    if (checkbox.checked) selectedProductIds.add(review.productId)
+    else selectedProductIds.delete(review.productId)
+    updateApprovalButton()
+  })
+  item.append(thumb, copy, checkbox)
+  return item
+}
+
+async function loadBatchDraft(productId: string): Promise<void> {
+  loadingDraftIds.add(productId)
+  try {
+    const draft = await sendMessage<PinDraft>({ type: 'GET_DRAFT_PREVIEW', productId })
+    if (dashboard?.reviews.some((review) => review.productId === productId)) batchDrafts.set(productId, draft)
+    failedDraftIds.delete(productId)
+    if (failedDraftIds.size === 0) element<HTMLElement>('review-feedback').hidden = true
+  } catch (error) {
+    failedDraftIds.add(productId)
+    const feedback = element<HTMLElement>('review-feedback')
+    feedback.hidden = false
+    feedback.className = 'review-feedback is-error'
+    feedback.textContent = `Gagal memuat draft: ${messageFromError(error)}. Klik Refresh status atau Detail / Edit untuk mencoba lagi.`
+  } finally {
+    loadingDraftIds.delete(productId)
+    if (dashboard) renderBatchReview(dashboard.reviews)
+  }
 }
 
 async function openDraftPreview(productId: string): Promise<void> {
@@ -199,6 +255,9 @@ async function openDraftPreview(productId: string): Promise<void> {
   feedback.textContent = 'Memuat preview Pin…'
   try {
     const draft = await sendMessage<PinDraft>({ type: 'GET_DRAFT_PREVIEW', productId })
+    batchDrafts.set(productId, draft)
+    failedDraftIds.delete(productId)
+    renderedBatchKey = ''
     activeReviewId = productId
     element<HTMLElement>('draft-preview').hidden = false
     element<HTMLImageElement>('review-poster').src = draft.posterDataUrl
@@ -285,6 +344,8 @@ function updateControlStates(state: string): void {
   const approveButton = element<HTMLButtonElement>('approve-button')
   approveButton.hidden = state !== 'awaiting_approval'
   approveButton.disabled = state !== 'awaiting_approval' || selectedProductIds.size === 0
+  const oldScheduledWait = state === 'await_publish_slot' && (dashboard?.status.nextRunAt ?? 0) > Date.now() + 60_000
+  element<HTMLButtonElement>('publish-now-button').hidden = !oldScheduledWait
   element<HTMLButtonElement>('stop-button').disabled = state === 'idle' || state === 'stopped'
 }
 
@@ -292,7 +353,12 @@ function updateApprovalButton(): void {
   const button = element<HTMLButtonElement>('approve-button')
   button.disabled = selectedProductIds.size === 0
   button.querySelector('span')!.textContent = `Approve ${selectedProductIds.size} selected Pins`
-  if (dashboard) element('batch-summary').textContent = `${dashboard.reviews.length} draft siap · ${selectedProductIds.size} dipilih. Klik Tinjau, lalu centang setiap Pin yang Anda setujui.`
+  if (dashboard) element('batch-summary').textContent = `${dashboard.reviews.length} draft siap · ${selectedProductIds.size} dipilih. Lihat gambar dan ringkasan, lalu centang Pin yang Anda pilih.`
+}
+
+async function publishRemainingNow(): Promise<void> {
+  if (!window.confirm('Terbitkan semua Pin yang sudah Anda setujui tetapi masih menunggu jadwal lama? Pin diproses mulai sekarang, berurutan sekitar 10 detik sekali.')) return
+  await runCommand({ type: 'PUBLISH_REMAINING_NOW' }, 'Remaining approved Pins are publishing now')
 }
 
 async function stopAutomationWithConfirmation(): Promise<void> {
@@ -306,8 +372,8 @@ async function approvePinBatch(): Promise<void> {
   if (activeReviewId && selectedProductIds.has(activeReviewId) && !await savePinReview(false)) return
   const selected = dashboard.reviews.filter((review) => selectedProductIds.has(review.productId))
   const titles = selected.map((review) => `• ${review.productTitle}`).join('\n')
-  if (!window.confirm(`Terbitkan ${selected.length} Pin berikut? Pin pertama segera, sisanya tersebar selama 8–12 jam.\n\n${titles}\n\nHanya Pin yang dipilih ini yang akan dikirim ke Pinterest.`)) return
-  await runCommand({ type: 'APPROVE_PIN_BATCH', productIds: selected.map((review) => review.productId) }, `${selected.length} Pins approved for scheduled publication`)
+  if (!window.confirm(`Terbitkan ${selected.length} Pin berikut sekarang? Pin diproses berurutan dengan jeda sekitar 10 detik.\n\n${titles}\n\nHanya Pin yang dipilih ini yang akan dikirim ke Pinterest.`)) return
+  await runCommand({ type: 'APPROVE_PIN_BATCH', productIds: selected.map((review) => review.productId) }, `${selected.length} Pins approved for immediate publication`)
 }
 
 async function savePinReview(showConfirmation: boolean): Promise<boolean> {
@@ -320,6 +386,9 @@ async function savePinReview(showConfirmation: boolean): Promise<boolean> {
       description: element<HTMLTextAreaElement>('review-description').value,
       altText: element<HTMLTextAreaElement>('review-alt-text').value,
     })
+    batchDrafts.set(activeReviewId, await sendMessage<PinDraft>({ type: 'GET_DRAFT_PREVIEW', productId: activeReviewId }))
+    renderedBatchKey = ''
+    if (dashboard) renderBatchReview(dashboard.reviews)
     if (showConfirmation) showToast('Reviewed draft saved')
     return true
   } catch (error) {

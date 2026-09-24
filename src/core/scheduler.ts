@@ -1,5 +1,10 @@
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
+export const IMMEDIATE_PIN_SPACING_MS = 10_000
+
+export function createImmediateSchedule(startAt: number, count: number): number[] {
+  return Array.from({ length: Math.max(0, count) }, (_, index) => startAt + index * IMMEDIATE_PIN_SPACING_MS)
+}
 
 interface ScheduleOptions {
   startAt: number

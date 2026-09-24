@@ -3,7 +3,7 @@
 AutoPin Shopee adalah ekstensi Chrome Manifest V3 yang menghubungkan alur
 **Shopee Affiliate → Pinterest**. Produk diambil dari halaman penawaran Shopee,
 shortlink affiliate resmi dibuat dari sesi pengguna, materi Pin disiapkan, lalu
-setiap Pin dibuka dan dipilih pengguna dalam review batch sebelum dipublikasikan melalui Pinterest API v5.
+setiap Pin ditampilkan dan dipilih pengguna dalam review batch sebelum dipublikasikan melalui Pinterest API v5.
 
 Proyek ini mengganti sumber Adobe Stock pada konsep AutoPin dengan adapter
 Shopee yang terinspirasi dan diadaptasi dari
@@ -23,9 +23,9 @@ Shopee yang terinspirasi dan diadaptasi dari
   OpenRouter, OpenAI, atau Gemini dengan validasi konten faktual.
 - Merender poster Pinterest 1000 × 1500 secara lokal tanpa mengubah bentuk
   produk secara generatif.
-- Memvalidasi Board milik akun terautentikasi, menyiapkan beberapa draft,
-  meminta pengguna membuka dan memilih setiap Pin, lalu menerima satu konfirmasi
-  untuk batch terpilih sebelum membuat Pin melalui `POST /v5/pins` dan memverifikasi hasil.
+- Memvalidasi Board milik akun terautentikasi, menampilkan ringkasan visual setiap
+  draft, meminta pengguna memilih tiap Pin yang diinginkan, lalu menerima satu
+  konfirmasi untuk batch terpilih sebelum membuat Pin melalui `POST /v5/pins` dan memverifikasi hasil.
 - Menyimpan checkpoint di IndexedDB, melanjutkan pekerjaan setelah browser hidup
   kembali, mencegah produk yang sama dipakai ulang selama 30 hari, dan membatasi
   publikasi sampai 10 Pin per hari.
@@ -76,14 +76,16 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
 6. Tentukan jumlah halaman Shopee yang akan dipindai (1–10). Isi tag pelacakan
    opsional, dipisahkan koma, jika ingin melacak performa link di Shopee.
 7. Biarkan **Developer dry run** aktif untuk percobaan pertama.
-8. Klik **Start**. Setelah draft batch siap, klik **Tinjau** pada setiap produk
-   untuk membuka poster, copy, disclosure, Board, dan link. Centang Pin yang
-   ingin diterbitkan; tidak ada Pin yang terpilih otomatis. Gunakan **Pause**
+8. Klik **Start**. Setelah draft batch siap, poster, copy, Board, dan link
+   langsung tampak pada kartu review. Centang setiap Pin yang ingin diterbitkan;
+   tidak ada Pin yang terpilih otomatis. **Detail / Edit** bersifat opsional
+   untuk melihat ukuran penuh atau mengubah teks. Gunakan **Pause**
    bila ingin melanjutkan review nanti; draft tetap tersimpan. **Stop** akan
    membuang draft yang belum diterbitkan setelah konfirmasi.
 9. Nonaktifkan dry run, lalu tekan **Approve selected Pins** satu kali. Hanya Pin
-   yang dicentang akan dipublikasikan menurut jadwal 8–12 jam. Lihat hasilnya di
-   **Recent pins** dan **Activity**.
+   yang dicentang dipublikasikan langsung berurutan dengan jeda sekitar 10 detik.
+   Jika batch lama masih menunggu jadwal berjam-jam, klik **Terbitkan sisa sekarang**.
+   Lihat hasilnya di **Recent pins** dan **Activity**.
 
 Jika menggunakan token Trial sementara, periksa masa berlakunya sebelum batch
 dimulai; token yang kedaluwarsa akan menghentikan posting sampai diganti.
