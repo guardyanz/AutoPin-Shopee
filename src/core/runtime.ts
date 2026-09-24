@@ -34,6 +34,6 @@ export const DEFAULT_RUNTIME_STATUS: RuntimeStatus = {
   state: 'idle',
   message: 'Ready to run preflight',
   completedToday: 0,
-  dailyLimit: 10,
+  dailyLimit: 100,
   updatedAt: Date.now(),
 }

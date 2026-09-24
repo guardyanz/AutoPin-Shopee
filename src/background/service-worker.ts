@@ -3,6 +3,7 @@ import type { ShopeeDiscoveryResult } from '../adapters/shopee-pagination'
 import { buildPinGenerationPrompt, buildPinRepairPrompt } from '../core/prompt'
 import type { ExtensionMessage, MessageResponse } from '../core/messages'
 import { createImmediateSchedule, localDayKey } from '../core/scheduler'
+import type { ShopeeCategory } from '../adapters/shopee-category'
 import { validateSettingsForStart, type AutomationSettings } from '../core/settings'
 import { nextConsecutiveFailureCount } from '../core/state-machine'
 import type { JobState, ProductCandidate, ProviderId } from '../core/types'
@@ -64,6 +65,7 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
     case 'GET_DASHBOARD':
       {
         const status = await getRuntimeStatus()
+        status.dailyLimit = (await loadSettings()).dailyLimit
         const job = status.state === 'awaiting_approval' ? await repository.loadJob() : undefined
         const drafts = job ? await Promise.all((job.draftProductIds ?? []).map((id) => repository.getDraft(id))) : []
         return {
@@ -97,6 +99,8 @@ async function handleUiMessage(message: ExtensionMessage): Promise<unknown> {
       return listPinterestBoards()
     case 'CREATE_PINTEREST_BOARD':
       return createPinterestBoard(message.name, message.description)
+    case 'LIST_SHOPEE_CATEGORIES':
+      return listShopeeCategories()
     case 'START_AUTOMATION':
       return startAutomation()
     case 'PAUSE_AUTOMATION':
@@ -183,6 +187,12 @@ async function listPinterestBoards(): Promise<{ boards: PinterestBoard[]; enviro
   return { boards, environment: settings.pinterestEnvironment }
 }
 
+async function listShopeeCategories(): Promise<ShopeeCategory[]> {
+  const tabId = await ensureTab('affiliate.shopee.co.id', AFFILIATE_URL)
+  await navigateAndWait(tabId, AFFILIATE_URL)
+  return sendToTab<ShopeeCategory[]>(tabId, { type: 'SHOPEE_CATEGORIES' })
+}
+
 async function createPinterestBoard(nameValue: string, descriptionValue: string): Promise<{ id: string; name: string }> {
   const name = nameValue.trim()
   const description = descriptionValue.trim()
@@ -231,7 +241,7 @@ async function startAutomation(): Promise<{ started: true }> {
   }
   await repository.saveJob(job)
   await clearRuntimePayload()
-  await log('info', 'preflight', `Preparing up to ${settings.dailyLimit - completedToday} Pin drafts for one batch review`)
+  await log('info', 'preflight', `Preparing up to ${Math.min(settings.batchSize, settings.dailyLimit - completedToday)} Pin drafts for one batch review`)
   void runAdvance()
   return { started: true }
 }
@@ -320,6 +330,9 @@ async function approvePinBatch(productIds: string[]): Promise<{ approved: number
   const completedToday = await repository.countPublicationsForDay(localDayKey())
   if (productIds.length > settings.dailyLimit - completedToday) {
     throw new AutomationError('daily_limit_exceeded', 'Selected Pins exceed the remaining daily publication quota')
+  }
+  if (productIds.length > settings.batchSize) {
+    throw new AutomationError('batch_limit_exceeded', 'Selected Pins exceed the configured batch size')
   }
   for (const id of productIds) {
     const draft = await repository.getDraft(id)
@@ -534,7 +547,9 @@ async function discoverProducts(job: JobSnapshot): Promise<void> {
   const result = await withSingleRetry(() => sendToTab<ShopeeDiscoveryResult>(tabId, {
     type: 'SHOPEE_DISCOVER',
     maxPages: settings.discoveryMaxPages,
-    maxProducts: Math.max(1, settings.dailyLimit - job.completedToday),
+    maxProducts: Math.max(1, Math.min(settings.batchSize, settings.dailyLimit - job.completedToday)),
+    category: settings.productCategory,
+    keywords: settings.productKeywords,
     affiliateTags: settings.affiliateTags,
   }))
   const diagnostics = result.diagnostics
@@ -568,7 +583,7 @@ async function selectCandidate(job: JobSnapshot): Promise<void> {
   }
 
   const draftIds = job.draftProductIds ?? []
-  if (draftIds.length >= settings.dailyLimit - currentCount) {
+  if (draftIds.length >= Math.min(settings.batchSize, settings.dailyLimit - currentCount)) {
     await transition(job, 'awaiting_approval', `${draftIds.length} Pin drafts ready for individual selection and one batch approval`)
     return
   }
@@ -937,7 +952,7 @@ async function updateStatus(
     message,
     activeProductTitle,
     completedToday,
-    dailyLimit: 10,
+    dailyLimit: (await loadSettings()).dailyLimit,
     nextRunAt,
     lastError,
     updatedAt: Date.now(),

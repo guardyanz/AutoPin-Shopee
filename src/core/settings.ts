@@ -11,7 +11,8 @@ export interface AutomationSettings {
   activeProvider: ProviderId
   providerConfigs: Record<ProviderId, ProviderConfiguration>
   modelCatalogs: Record<ProviderId, ProviderModel[]>
-  dailyLimit: 10
+  dailyLimit: number
+  batchSize: number
   minimumWindowHours: 8
   maximumWindowHours: 12
   disclosure: '#affiliate'
@@ -20,6 +21,8 @@ export interface AutomationSettings {
   researchKeywords: string[]
   researchUpdatedAt: number | null
   discoveryMaxPages: number
+  productCategory: string
+  productKeywords: string
   affiliateTags: string[]
   pinterestEnvironment: PinterestApiEnvironment
   pinterestOAuthWorkerUrl: string
@@ -48,7 +51,8 @@ export const DEFAULT_SETTINGS: AutomationSettings = {
     openai: [],
     gemini: [],
   },
-  dailyLimit: 10,
+  dailyLimit: 100,
+  batchSize: 10,
   minimumWindowHours: 8,
   maximumWindowHours: 12,
   disclosure: '#affiliate',
@@ -57,6 +61,8 @@ export const DEFAULT_SETTINGS: AutomationSettings = {
   researchKeywords: [],
   researchUpdatedAt: null,
   discoveryMaxPages: 3,
+  productCategory: '',
+  productKeywords: '',
   affiliateTags: [],
   pinterestEnvironment: 'sandbox',
   pinterestOAuthWorkerUrl: 'https://autopin-shopee-oauth.akurindowijayapwt.workers.dev',

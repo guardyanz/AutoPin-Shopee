@@ -13,30 +13,31 @@
         <strong>AutoPin Shopee</strong>
         <span id="connection-label">Shopee Affiliate → Pinterest</span>
       </div>
-      <button class="icon-button" id="refresh-dashboard" type="button" title="Refresh status" aria-label="Refresh status">
+      <button class="icon-button" id="refresh-dashboard" type="button" title="Muat ulang status" aria-label="Muat ulang status">
         <i data-lucide="refresh-cw"></i>
       </button>
     </header>
 
-    <nav class="tabs" aria-label="Main views">
-      <button class="tab is-active" type="button" data-tab="dashboard"><i data-lucide="gauge"></i><span>Dashboard</span></button>
-      <button class="tab" type="button" data-tab="activity"><i data-lucide="logs"></i><span>Activity</span></button>
-      <button class="tab" type="button" data-tab="settings"><i data-lucide="settings-2"></i><span>Settings</span></button>
+    <nav class="tabs" aria-label="Halaman utama">
+      <button class="tab is-active" type="button" data-tab="dashboard"><i data-lucide="gauge"></i><span>Ringkasan</span></button>
+      <button class="tab" type="button" data-tab="activity"><i data-lucide="logs"></i><span>Aktivitas</span></button>
+      <button class="tab" type="button" data-tab="settings"><i data-lucide="settings-2"></i><span>Pengaturan</span></button>
     </nav>
 
     <main>
       <section class="view is-active" id="view-dashboard" aria-labelledby="dashboard-title">
+        <div class="status-card">
         <div class="status-band">
           <div class="status-heading">
             <span class="status-dot" id="status-dot"></span>
             <div>
               <span class="eyebrow" id="status-state">Idle</span>
-              <h1 id="dashboard-title">Ready to run preflight</h1>
+              <h1 id="dashboard-title">Siap memulai pemeriksaan</h1>
             </div>
           </div>
-          <div class="quota" aria-label="Daily publication quota">
+          <div class="quota" aria-label="Batas publikasi harian">
             <strong id="quota-count">0</strong>
-            <span>/ 10</span>
+            <span id="quota-limit">/ 100</span>
           </div>
         </div>
 
@@ -44,73 +45,79 @@
 
         <dl class="run-metadata">
           <div>
-            <dt>Current product</dt>
-            <dd id="current-product">No product selected</dd>
+            <dt>Produk saat ini</dt>
+            <dd id="current-product">Belum ada produk</dd>
           </div>
           <div>
-            <dt>Next action</dt>
-            <dd id="next-action">Not scheduled</dd>
+            <dt>Langkah berikutnya</dt>
+            <dd id="next-action">Belum dijadwalkan</dd>
           </div>
         </dl>
+        <p class="source-context" id="source-filter-summary">Sumber: semua produk Shopee Affiliate</p>
+        </div>
 
-        <div class="run-controls" aria-label="Automation controls">
-          <button class="button button-primary" id="start-button" type="button"><i data-lucide="play"></i><span>Start</span></button>
-          <button class="button" id="pause-button" type="button"><i data-lucide="pause"></i><span>Pause</span></button>
-          <button class="button" id="resume-button" type="button"><i data-lucide="rotate-ccw"></i><span>Resume</span></button>
-          <button class="button button-primary approval-button" id="approve-button" type="button" hidden><i data-lucide="shield-check"></i><span>Approve selected Pins</span></button>
+        <div class="run-controls" aria-label="Kontrol otomatisasi">
+          <button class="button button-primary" id="start-button" type="button"><i data-lucide="play"></i><span>Mulai</span></button>
+          <button class="button" id="pause-button" type="button"><i data-lucide="pause"></i><span>Jeda</span></button>
+          <button class="button" id="resume-button" type="button"><i data-lucide="rotate-ccw"></i><span>Lanjutkan</span></button>
+          <button class="icon-button icon-button-danger" id="stop-button" type="button" title="Hentikan otomatisasi" aria-label="Hentikan otomatisasi"><i data-lucide="square"></i></button>
+          <button class="button button-primary approval-button" id="approve-button" type="button" hidden><i data-lucide="shield-check"></i><span>Setujui Pin pilihan</span></button>
           <button class="button button-primary publish-now-button" id="publish-now-button" type="button" hidden>Terbitkan sisa sekarang</button>
-          <button class="icon-button icon-button-danger" id="stop-button" type="button" title="Stop automation" aria-label="Stop automation"><i data-lucide="square"></i></button>
         </div>
 
         <section class="section-block review-panel" id="review-panel" aria-labelledby="review-title" hidden>
           <div class="section-heading">
-            <div><span class="eyebrow">Batch review</span><h2 id="review-title">Pilih Pin yang akan dipublikasikan</h2></div>
+            <div><span class="eyebrow">Tinjau batch</span><h2 id="review-title">Pilih Pin yang akan dipublikasikan</h2></div>
           </div>
-          <p class="review-note" id="batch-summary">Lihat gambar dan ringkasan setiap Pin, lalu centang yang Anda pilih. Tidak ada Pin yang terpilih otomatis.</p>
+          <p class="review-note" id="batch-summary">Lihat galeri draft, lalu pilih Pin yang sesuai dengan Board. Tidak ada Pin yang terpilih otomatis.</p>
+          <div class="batch-actions" role="group" aria-label="Pilihan batch Pin">
+            <button class="button button-tonal" id="select-all-button" type="button" disabled>Pilih semua Pin</button>
+            <button class="button button-text" id="clear-selection-button" type="button" disabled>Kosongkan</button>
+          </div>
           <ul class="batch-list" id="batch-list" aria-label="Draft Pin untuk ditinjau"></ul>
           <p class="review-feedback" id="review-feedback" role="status" hidden></p>
           <div id="draft-preview" hidden>
-            <img class="review-poster" id="review-poster" alt="Poster draft awaiting review" />
+            <img class="review-poster" id="review-poster" alt="Poster draft untuk ditinjau" />
             <p class="review-product" id="review-product"></p>
             <div class="field-group">
-              <label for="review-pin-title">Pin title</label>
+              <label for="review-pin-title">Judul Pin</label>
               <input id="review-pin-title" type="text" maxlength="100" />
             </div>
             <div class="field-group">
-              <label for="review-description">Description</label>
+              <label for="review-description">Deskripsi</label>
               <textarea id="review-description" maxlength="800" rows="5"></textarea>
             </div>
             <div class="field-group">
-              <label for="review-alt-text">Alt text</label>
+              <label for="review-alt-text">Teks alternatif gambar</label>
               <textarea id="review-alt-text" maxlength="500" rows="3"></textarea>
             </div>
             <dl class="run-metadata review-metadata">
-              <div><dt>Destination</dt><dd><a id="review-destination" target="_blank" rel="noreferrer"></a></dd></div>
+              <div><dt>Tautan tujuan</dt><dd><a id="review-destination" target="_blank" rel="noreferrer"></a></dd></div>
               <div><dt>Board</dt><dd id="review-board"></dd></div>
             </dl>
-            <button class="button button-full" id="save-review" type="button"><i data-lucide="save"></i><span>Save reviewed draft</span></button>
+            <button class="button button-full" id="save-review" type="button"><i data-lucide="save"></i><span>Simpan perubahan draft</span></button>
           </div>
-          <p class="review-note">Periksa gambar, teks, #affiliate, tautan, Board, dan hak penggunaan setiap Pin. Satu konfirmasi menerbitkan hanya Pin yang Anda centang; batch diproses langsung berurutan dengan jeda sekitar 10 detik antar-Pin.</p>
+          <p class="review-note">Pastikan gambar, teks, tautan, dan Board sesuai. Pilihan semua berlaku untuk draft yang tampil di galeri. Sebelum terbit, daftar Pin pilihan ditampilkan lagi untuk konfirmasi. Pin dikirim berurutan dengan jeda sekitar 10 detik.</p>
         </section>
 
         <section class="section-block" aria-labelledby="pipeline-title">
           <div class="section-heading">
-            <h2 id="pipeline-title">Pipeline</h2>
-            <span id="updated-at">Not started</span>
+            <h2 id="pipeline-title">Alur kerja</h2>
+            <span id="updated-at">Belum dimulai</span>
           </div>
           <ol class="pipeline" id="pipeline-list">
-            <li data-stage-group="source"><span>1</span><div><strong>Shopee source</strong><small>Discovery, product data, affiliate link</small></div></li>
-            <li data-stage-group="creative"><span>2</span><div><strong>Creative</strong><small>Copy validation and poster render</small></div></li>
-            <li data-stage-group="publish"><span>3</span><div><strong>Pinterest API</strong><small>Review, explicit approval, verification</small></div></li>
+            <li data-stage-group="source"><span>1</span><div><strong>Sumber Shopee</strong><small>Cari produk dan tautan afiliasi</small></div></li>
+            <li data-stage-group="creative"><span>2</span><div><strong>Materi Pin</strong><small>Validasi teks dan buat poster</small></div></li>
+            <li data-stage-group="publish"><span>3</span><div><strong>Pinterest API</strong><small>Tinjau, setujui, dan verifikasi</small></div></li>
           </ol>
         </section>
 
         <section class="section-block" aria-labelledby="recent-title">
           <div class="section-heading">
-            <h2 id="recent-title">Recent pins</h2>
-            <button class="text-button" type="button" data-open-tab="activity">View activity</button>
+            <h2 id="recent-title">Pin terbaru</h2>
+            <button class="text-button" type="button" data-open-tab="activity">Lihat aktivitas</button>
           </div>
-          <div class="empty-state" id="recent-empty">No verified pins yet</div>
+          <div class="empty-state" id="recent-empty">Belum ada Pin terbit. Atur sumber dan Board, lalu mulai batch pertama.</div>
           <ul class="publication-list" id="publication-list"></ul>
         </section>
       </section>
@@ -118,27 +125,27 @@
       <section class="view" id="view-activity" aria-labelledby="activity-title">
         <div class="page-heading">
           <div>
-            <span class="eyebrow">Audit trail</span>
-            <h1 id="activity-title">Activity</h1>
+            <span class="eyebrow">Catatan proses</span>
+            <h1 id="activity-title">Aktivitas</h1>
           </div>
           <span class="count-badge" id="activity-count">0</span>
         </div>
         <ul class="activity-list" id="activity-list"></ul>
-        <div class="empty-state" id="activity-empty">No activity recorded</div>
+        <div class="empty-state" id="activity-empty">Belum ada aktivitas. Jalankan batch untuk melihat prosesnya di sini.</div>
       </section>
 
       <section class="view" id="view-settings" aria-labelledby="settings-title">
         <div class="page-heading">
           <div>
-            <span class="eyebrow">Configuration</span>
-            <h1 id="settings-title">Settings</h1>
+            <span class="eyebrow">Konfigurasi</span>
+            <h1 id="settings-title">Pengaturan</h1>
           </div>
           <span class="save-state" id="save-state"></span>
         </div>
 
         <form id="settings-form">
           <fieldset class="field-group">
-            <legend>AI provider</legend>
+            <legend>Penyedia AI</legend>
             <div class="segmented-control" id="provider-segments">
               <button type="button" data-provider="openrouter" class="is-active">OpenRouter</button>
               <button type="button" data-provider="openai">OpenAI</button>
@@ -150,48 +157,48 @@
             <label for="api-key">API key</label>
             <div class="input-with-action">
               <input id="api-key" type="password" autocomplete="off" spellcheck="false" />
-              <button class="icon-button input-action" id="toggle-key" type="button" title="Show API key" aria-label="Show API key"><i data-lucide="eye"></i></button>
+              <button class="icon-button input-action" id="toggle-key" type="button" title="Tampilkan API key" aria-label="Tampilkan API key"><i data-lucide="eye"></i></button>
             </div>
           </div>
 
           <div class="settings-actions">
             <button class="button" id="test-provider" type="button"><i data-lucide="plug-zap"></i><span>Test</span></button>
-            <button class="button" id="fetch-models" type="button"><i data-lucide="download"></i><span>Fetch Models</span></button>
+            <button class="button" id="fetch-models" type="button"><i data-lucide="download"></i><span>Muat model</span></button>
           </div>
 
           <div class="field-group">
-            <label for="primary-model">Primary model</label>
-            <select id="primary-model"><option value="">Select a model</option></select>
+            <label for="primary-model">Model utama</label>
+            <select id="primary-model"><option value="">Pilih model</option></select>
           </div>
 
           <div class="field-group">
-            <label for="fallback-model">Fallback model</label>
-            <select id="fallback-model"><option value="">No fallback</option></select>
+            <label for="fallback-model">Model cadangan</label>
+            <select id="fallback-model"><option value="">Tanpa cadangan</option></select>
           </div>
 
           <div class="field-group">
-            <label for="pinterest-environment">Pinterest API environment</label>
+            <label for="pinterest-environment">Lingkungan Pinterest API</label>
             <select id="pinterest-environment">
-              <option value="sandbox">Sandbox (requires a Sandbox token)</option>
-              <option value="production">Production (Trial or Standard token)</option>
+              <option value="sandbox">Sandbox (memerlukan token Sandbox)</option>
+              <option value="production">Production (token Trial atau Standard)</option>
             </select>
           </div>
 
           <div class="field-group">
-            <label for="oauth-worker-url">OAuth callback service</label>
+            <label for="oauth-worker-url">Layanan callback OAuth</label>
             <input id="oauth-worker-url" type="url" inputmode="url" placeholder="https://autopin-shopee-oauth.example.workers.dev" />
           </div>
 
           <div class="settings-actions">
-            <button class="button" id="connect-pinterest" type="button"><i data-lucide="link-2"></i><span>Connect account</span></button>
-            <button class="button" id="disconnect-pinterest" type="button"><i data-lucide="unlink"></i><span>Disconnect</span></button>
+            <button class="button" id="connect-pinterest" type="button"><i data-lucide="link-2"></i><span>Hubungkan akun</span></button>
+            <button class="button" id="disconnect-pinterest" type="button"><i data-lucide="unlink"></i><span>Putuskan</span></button>
           </div>
-          <p class="save-state" id="pinterest-connection-state">Not connected</p>
+          <p class="save-state" id="pinterest-connection-state">Belum terhubung</p>
 
           <div class="field-group">
-            <label for="pinterest-token">Pinterest access token</label>
-            <input id="pinterest-token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a token or use Connect account" />
-            <small>Sandbox and Production tokens are different. Trial test tokens may expire after 24 hours; renew a temporary token before approving a long batch, or use OAuth refresh.</small>
+            <label for="pinterest-token">Token akses Pinterest</label>
+            <input id="pinterest-token" type="password" autocomplete="off" spellcheck="false" placeholder="Tempel token atau hubungkan akun" />
+            <small>Token Sandbox dan Production berbeda. Token uji Trial dapat kedaluwarsa setelah 24 jam; perbarui sebelum menyetujui batch besar, atau gunakan penyegaran OAuth.</small>
           </div>
 
           <div class="field-group">
@@ -210,11 +217,33 @@
           </div>
 
           <div class="field-group">
-            <label for="board-description">Board description</label>
-            <textarea id="board-description" maxlength="500" rows="3" placeholder="Used only when you explicitly create a Board"></textarea>
+            <label for="board-description">Deskripsi Board</label>
+            <textarea id="board-description" maxlength="500" rows="3" placeholder="Hanya dipakai saat membuat Board baru"></textarea>
           </div>
 
-          <button class="button button-full" id="create-board" type="button"><i data-lucide="workflow"></i><span>Create this Board through API</span></button>
+          <button class="button button-full" id="create-board" type="button"><i data-lucide="workflow"></i><span>Buat Board melalui API</span></button>
+
+          <div class="settings-divider"><h2>Produk Shopee &amp; batch</h2><p>Atur sumber sesuai tema Board sebelum memulai batch baru.</p></div>
+
+          <div class="field-group">
+            <label for="batch-size">Jumlah Pin per batch</label>
+            <input id="batch-size" type="number" min="1" max="100" step="1" required />
+            <small>1 sampai 100 draft. Pembuatan poster memakai layanan AI yang Anda pilih.</small>
+          </div>
+
+          <div class="field-group">
+            <label for="product-category">Tab kategori Shopee</label>
+            <input id="product-category" type="text" list="shopee-categories" autocomplete="off" placeholder="Semua produk" />
+            <datalist id="shopee-categories"></datalist>
+            <small id="category-list-state">Kosongkan untuk semua kategori, atau muat pilihan dari halaman Penawaran Produk.</small>
+          </div>
+          <button class="button button-full" id="load-categories" type="button"><i data-lucide="refresh-cw"></i><span>Muat kategori dari Shopee</span></button>
+
+          <div class="field-group">
+            <label for="product-keywords">Kata kunci judul produk</label>
+            <input id="product-keywords" type="text" maxlength="100" autocomplete="off" placeholder="Contoh: lampu meja" />
+            <small>Opsional. Semua kata harus muncul di judul produk, urutannya bebas. Gabungkan dengan kategori untuk hasil lebih spesifik.</small>
+          </div>
 
           <div class="field-group">
             <label for="discovery-pages">Halaman Shopee yang dipindai</label>
@@ -228,19 +257,33 @@
           </div>
 
           <label class="toggle-row" for="dry-run">
-            <span><strong>Developer dry run</strong><small>Prepare and review; do not call Create Pin</small></span>
+            <span><strong>Uji tanpa publikasi</strong><small>Siapkan dan tinjau; tidak mengirim Pin ke Pinterest</small></span>
             <input id="dry-run" type="checkbox" />
           </label>
 
           <div class="compliance-row">
             <i data-lucide="shield-check"></i>
-            <span><strong>Batch review, pilihan per Pin</strong><small>#affiliate · maksimum 10 Pin/hari</small></span>
+            <span><strong>Konfirmasi batch sebelum terbit</strong><small>#affiliate · maksimum 100 Pin per hari</small></span>
           </div>
 
-          <button class="button button-primary button-full" type="submit"><i data-lucide="save"></i><span>Save Settings</span></button>
+          <button class="button button-primary button-full" type="submit"><i data-lucide="save"></i><span>Simpan pengaturan</span></button>
         </form>
       </section>
     </main>
+
+    <dialog class="batch-dialog" id="batch-confirm-dialog" aria-labelledby="batch-confirm-title">
+      <div class="batch-dialog-content">
+        <span class="eyebrow">Konfirmasi publikasi</span>
+        <h2 id="batch-confirm-title">Terbitkan Pin pilihan?</h2>
+        <p id="batch-confirm-summary"></p>
+        <ol id="batch-confirm-list" aria-label="Pin yang akan dikirim"></ol>
+        <p class="review-note">Periksa daftar ini. Hanya Pin yang tercantum yang dikirim ke Pinterest.</p>
+        <div class="batch-dialog-actions">
+          <button class="button button-text" id="batch-cancel-button" type="button">Batal</button>
+          <button class="button button-primary" id="batch-confirm-button" type="button">Terbitkan Pin</button>
+        </div>
+      </div>
+    </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script type="module" src="./sidepanel.ts"></script>

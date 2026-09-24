@@ -25,6 +25,7 @@ import type { AutomationSettings } from '../core/settings'
 import type { ProviderId, ProviderModel } from '../core/types'
 import type { PinterestBoard } from '../providers/pinterest-api'
 import type { PinDraft, PublicationRecord } from '../storage/types'
+import type { ShopeeCategory } from '../adapters/shopee-category'
 
 interface DashboardData {
   status: RuntimeStatus
@@ -53,6 +54,7 @@ const loadingDraftIds = new Set<string>()
 const failedDraftIds = new Set<string>()
 let renderedBatchKey = ''
 let pinterestBoards: PinterestBoard[] = []
+let pendingApprovalIds: string[] = []
 
 document.addEventListener('DOMContentLoaded', () => {
   createIcons({ icons: iconSet })
@@ -80,10 +82,14 @@ function openTab(tab: string): void {
 
 function bindControls(): void {
   element<HTMLButtonElement>('refresh-dashboard').addEventListener('click', () => void refreshDashboard(true))
-  element<HTMLButtonElement>('start-button').addEventListener('click', () => void runCommand({ type: 'START_AUTOMATION' }, 'Automation started'))
-  element<HTMLButtonElement>('pause-button').addEventListener('click', () => void runCommand({ type: 'PAUSE_AUTOMATION' }, 'Automation paused'))
-  element<HTMLButtonElement>('resume-button').addEventListener('click', () => void runCommand({ type: 'RESUME_AUTOMATION' }, 'Automation resumed'))
+  element<HTMLButtonElement>('start-button').addEventListener('click', () => void runCommand({ type: 'START_AUTOMATION' }, 'Otomatisasi dimulai'))
+  element<HTMLButtonElement>('pause-button').addEventListener('click', () => void runCommand({ type: 'PAUSE_AUTOMATION' }, 'Otomatisasi dijeda'))
+  element<HTMLButtonElement>('resume-button').addEventListener('click', () => void runCommand({ type: 'RESUME_AUTOMATION' }, 'Otomatisasi dilanjutkan'))
   element<HTMLButtonElement>('approve-button').addEventListener('click', () => void approvePinBatch())
+  element<HTMLButtonElement>('select-all-button').addEventListener('click', selectAllBatchPins)
+  element<HTMLButtonElement>('clear-selection-button').addEventListener('click', clearBatchSelection)
+  element<HTMLButtonElement>('batch-cancel-button').addEventListener('click', () => element<HTMLDialogElement>('batch-confirm-dialog').close())
+  element<HTMLButtonElement>('batch-confirm-button').addEventListener('click', () => void confirmPinBatch())
   element<HTMLButtonElement>('publish-now-button').addEventListener('click', () => void publishRemainingNow())
   element<HTMLButtonElement>('save-review').addEventListener('click', () => void savePinReview(true))
   element<HTMLButtonElement>('stop-button').addEventListener('click', () => void stopAutomationWithConfirmation())
@@ -99,12 +105,13 @@ function bindSettings(): void {
   element<HTMLButtonElement>('connect-pinterest').addEventListener('click', () => void connectPinterest())
   element<HTMLButtonElement>('disconnect-pinterest').addEventListener('click', () => void disconnectPinterest())
   element<HTMLButtonElement>('load-boards').addEventListener('click', () => void loadPinterestBoards(true))
+  element<HTMLButtonElement>('load-categories').addEventListener('click', () => void loadShopeeCategories())
   element<HTMLButtonElement>('create-board').addEventListener('click', () => void createPinterestBoard())
   element<HTMLSelectElement>('pinterest-board-id').addEventListener('change', selectPinterestBoard)
   element<HTMLSelectElement>('pinterest-environment').addEventListener('change', () => {
     pinterestBoards = []
     renderBoardOptions()
-    element('board-list-state').textContent = 'Environment changed. Muat ulang daftar Board dengan token yang sesuai.'
+    element('board-list-state').textContent = 'Lingkungan berubah. Muat ulang Board dengan token yang sesuai.'
   })
   element<HTMLFormElement>('settings-form').addEventListener('submit', (event) => {
     event.preventDefault()
@@ -117,7 +124,7 @@ async function refreshDashboard(showConfirmation: boolean): Promise<void> {
     if (showConfirmation) failedDraftIds.clear()
     dashboard = await sendMessage<DashboardData>({ type: 'GET_DASHBOARD' })
     renderDashboard(dashboard)
-    if (showConfirmation) showToast('Status refreshed')
+    if (showConfirmation) showToast('Status diperbarui')
   } catch (error) {
     showToast(messageFromError(error), true)
   }
@@ -126,12 +133,13 @@ async function refreshDashboard(showConfirmation: boolean): Promise<void> {
 function renderDashboard(data: DashboardData): void {
   const { status } = data
   element('status-state').textContent = readableState(status.state)
-  element('dashboard-title').textContent = status.message
+  element('dashboard-title').textContent = displayStatusMessage(status)
   element('quota-count').textContent = String(status.completedToday)
+  element('quota-limit').textContent = `/ ${status.dailyLimit}`
   element<HTMLElement>('quota-progress').style.width = `${Math.min(100, status.completedToday / status.dailyLimit * 100)}%`
-  element('current-product').textContent = status.activeProductTitle || 'No product selected'
-  element('next-action').textContent = status.nextRunAt ? formatFuture(status.nextRunAt) : 'Not scheduled'
-  element('updated-at').textContent = `Updated ${formatTime(status.updatedAt)}`
+  element('current-product').textContent = status.activeProductTitle || 'Belum ada produk'
+  element('next-action').textContent = status.nextRunAt ? formatFuture(status.nextRunAt) : 'Belum dijadwalkan'
+  element('updated-at').textContent = `Diperbarui ${formatTime(status.updatedAt)}`
 
   const dot = element('status-dot')
   dot.className = 'status-dot'
@@ -162,9 +170,12 @@ function renderBatchReview(reviews: PinReviewData[]): void {
   const available = new Set(reviews.map((review) => review.productId))
   for (const id of selectedProductIds) if (!available.has(id)) selectedProductIds.delete(id)
   for (const id of batchDrafts.keys()) if (!available.has(id)) batchDrafts.delete(id)
+  let availableSlots = Math.max(0, 6 - loadingDraftIds.size)
   for (const review of reviews) {
+    if (availableSlots === 0) break
     if (!batchDrafts.has(review.productId) && !loadingDraftIds.has(review.productId) && !failedDraftIds.has(review.productId)) {
       void loadBatchDraft(review.productId)
+      availableSlots -= 1
     }
   }
   const nextKey = reviews.map((review) => `${review.productId}:${batchDrafts.get(review.productId)?.content.pinTitle ?? ''}:${failedDraftIds.has(review.productId)}`).join('|')
@@ -225,7 +236,10 @@ function renderBatchCard(review: PinReviewData): HTMLLIElement {
     else selectedProductIds.delete(review.productId)
     updateApprovalButton()
   })
-  item.append(thumb, copy, checkbox)
+  const selectionTarget = document.createElement('label')
+  selectionTarget.className = 'batch-select'
+  selectionTarget.append(checkbox)
+  item.append(thumb, copy, selectionTarget)
   return item
 }
 
@@ -305,9 +319,9 @@ function renderPublications(publications: PublicationRecord[]): void {
       content.setAttribute('aria-label', `Buka Pin ${publication.productTitle} di Pinterest`)
     }
     const title = document.createElement('strong')
-    title.textContent = publication.productTitle || 'Published Shopee product'
+    title.textContent = publication.productTitle || 'Produk Shopee terbit'
     const meta = document.createElement('span')
-    meta.textContent = `Verified publication · ${formatTime(publication.publishedAt)}`
+    meta.textContent = `Terbit terverifikasi · ${formatTime(publication.publishedAt)}`
     content.append(title, meta)
     item.append(content)
     return item
@@ -352,8 +366,28 @@ function updateControlStates(state: string): void {
 function updateApprovalButton(): void {
   const button = element<HTMLButtonElement>('approve-button')
   button.disabled = selectedProductIds.size === 0
-  button.querySelector('span')!.textContent = `Approve ${selectedProductIds.size} selected Pins`
-  if (dashboard) element('batch-summary').textContent = `${dashboard.reviews.length} draft siap · ${selectedProductIds.size} dipilih. Lihat gambar dan ringkasan, lalu centang Pin yang Anda pilih.`
+  button.querySelector('span')!.textContent = `Setujui ${selectedProductIds.size} Pin pilihan`
+  if (!dashboard) return
+  const total = dashboard.reviews.length
+  const loaded = dashboard.reviews.filter((review) => batchDrafts.has(review.productId)).length
+  const selectAll = element<HTMLButtonElement>('select-all-button')
+  selectAll.disabled = loaded !== total || failedDraftIds.size > 0 || selectedProductIds.size === total
+  selectAll.textContent = `Pilih semua ${total} Pin`
+  element<HTMLButtonElement>('clear-selection-button').disabled = selectedProductIds.size === 0
+  element('batch-summary').textContent = `${loaded}/${total} gambar siap · ${selectedProductIds.size} dipilih. Periksa galeri sebelum menerbitkan.`
+}
+
+function selectAllBatchPins(): void {
+  if (!dashboard || dashboard.reviews.some((review) => !batchDrafts.has(review.productId))) return
+  for (const review of dashboard.reviews) selectedProductIds.add(review.productId)
+  renderedBatchKey = ''
+  renderBatchReview(dashboard.reviews)
+}
+
+function clearBatchSelection(): void {
+  selectedProductIds.clear()
+  renderedBatchKey = ''
+  if (dashboard) renderBatchReview(dashboard.reviews)
 }
 
 async function publishRemainingNow(): Promise<void> {
@@ -371,9 +405,36 @@ async function approvePinBatch(): Promise<void> {
   if (selectedProductIds.size === 0 || !dashboard) return
   if (activeReviewId && selectedProductIds.has(activeReviewId) && !await savePinReview(false)) return
   const selected = dashboard.reviews.filter((review) => selectedProductIds.has(review.productId))
-  const titles = selected.map((review) => `• ${review.productTitle}`).join('\n')
-  if (!window.confirm(`Terbitkan ${selected.length} Pin berikut sekarang? Pin diproses berurutan dengan jeda sekitar 10 detik.\n\n${titles}\n\nHanya Pin yang dipilih ini yang akan dikirim ke Pinterest.`)) return
-  await runCommand({ type: 'APPROVE_PIN_BATCH', productIds: selected.map((review) => review.productId) }, `${selected.length} Pins approved for immediate publication`)
+  pendingApprovalIds = selected.map((review) => review.productId)
+  element('batch-confirm-title').textContent = `Terbitkan ${selected.length} Pin pilihan?`
+  element('batch-confirm-summary').textContent = `Board: ${selected[0]?.boardLabel || selected[0]?.boardId}. Pin dikirim berurutan mulai sekarang.`
+  element<HTMLOListElement>('batch-confirm-list').replaceChildren(...selected.map((review) => {
+    const item = document.createElement('li')
+    const title = document.createElement('strong')
+    title.textContent = review.title
+    const link = document.createElement('small')
+    link.textContent = review.destinationUrl
+    item.append(title, link)
+    return item
+  }))
+  element<HTMLDialogElement>('batch-confirm-dialog').showModal()
+}
+
+async function confirmPinBatch(): Promise<void> {
+  if (pendingApprovalIds.length === 0) return
+  setBusy('batch-confirm-button', true)
+  try {
+    const count = pendingApprovalIds.length
+    await sendMessage({ type: 'APPROVE_PIN_BATCH', productIds: pendingApprovalIds })
+    pendingApprovalIds = []
+    element<HTMLDialogElement>('batch-confirm-dialog').close()
+    showToast(`${count} Pin disetujui untuk diterbitkan`)
+    await refreshDashboard(false)
+  } catch (error) {
+    showToast(messageFromError(error), true)
+  } finally {
+    setBusy('batch-confirm-button', false)
+  }
 }
 
 async function savePinReview(showConfirmation: boolean): Promise<boolean> {
@@ -421,9 +482,13 @@ function renderSettings(): void {
   element<HTMLInputElement>('board-name').value = settings.boardName
   element<HTMLTextAreaElement>('board-description').value = settings.boardDescription
   element<HTMLInputElement>('discovery-pages').value = String(settings.discoveryMaxPages)
+  element<HTMLInputElement>('batch-size').value = String(settings.batchSize)
+  element<HTMLInputElement>('product-category').value = settings.productCategory
+  element<HTMLInputElement>('product-keywords').value = settings.productKeywords
+  element('source-filter-summary').textContent = `Sumber: ${settings.productCategory || 'semua kategori'}${settings.productKeywords ? ` · judul memuat "${settings.productKeywords}"` : ''}`
   element<HTMLInputElement>('affiliate-tags').value = settings.affiliateTags.join(', ')
   element<HTMLInputElement>('dry-run').checked = settings.developerDryRun
-  element('pinterest-connection-state').textContent = settings.pinterestAccessToken ? 'Connected / token available' : 'Not connected'
+  element('pinterest-connection-state').textContent = settings.pinterestAccessToken ? 'Terhubung / token tersedia' : 'Belum terhubung'
   element<HTMLButtonElement>('disconnect-pinterest').disabled = !settings.pinterestAccessToken
   renderModelOptions(settings.modelCatalogs[provider], config.primaryModel, config.fallbackModel)
 }
@@ -448,6 +513,9 @@ function captureCurrentProviderFields(): void {
   settings.boardName = element<HTMLInputElement>('board-name').value.trim()
   settings.boardDescription = element<HTMLTextAreaElement>('board-description').value.trim()
   settings.discoveryMaxPages = Number.parseInt(element<HTMLInputElement>('discovery-pages').value, 10) || 3
+  settings.batchSize = Number.parseInt(element<HTMLInputElement>('batch-size').value, 10) || 10
+  settings.productCategory = element<HTMLInputElement>('product-category').value.trim()
+  settings.productKeywords = element<HTMLInputElement>('product-keywords').value.trim()
   settings.affiliateTags = element<HTMLInputElement>('affiliate-tags').value
     .split(',').map((tag) => tag.trim()).filter(Boolean)
   settings.developerDryRun = element<HTMLInputElement>('dry-run').checked
@@ -481,8 +549,8 @@ function selectPinterestBoard(): void {
 function renderModelOptions(models: ProviderModel[], primary: string, fallback: string): void {
   const primarySelect = element<HTMLSelectElement>('primary-model')
   const fallbackSelect = element<HTMLSelectElement>('fallback-model')
-  primarySelect.replaceChildren(option('', 'Select a model'), ...models.map((model) => option(model.id, model.label)))
-  fallbackSelect.replaceChildren(option('', 'No fallback'), ...models.map((model) => option(model.id, model.label)))
+  primarySelect.replaceChildren(option('', 'Pilih model'), ...models.map((model) => option(model.id, model.label)))
+  fallbackSelect.replaceChildren(option('', 'Tanpa cadangan'), ...models.map((model) => option(model.id, model.label)))
   if (primary && !models.some((model) => model.id === primary)) primarySelect.append(option(primary, primary))
   if (fallback && !models.some((model) => model.id === fallback)) fallbackSelect.append(option(fallback, fallback))
   primarySelect.value = primary
@@ -494,8 +562,8 @@ async function persistSettings(showConfirmation = true): Promise<boolean> {
   captureCurrentProviderFields()
   try {
     settings = await sendMessage<AutomationSettings>({ type: 'SAVE_SETTINGS', settings })
-    element('save-state').textContent = 'Saved'
-    if (showConfirmation) showToast('Settings saved')
+    element('save-state').textContent = 'Tersimpan'
+    if (showConfirmation) showToast('Pengaturan tersimpan')
     window.setTimeout(() => { element('save-state').textContent = '' }, 2_000)
     return true
   } catch (error) {
@@ -512,7 +580,7 @@ async function fetchModels(): Promise<void> {
   try {
     await sendMessage({ type: 'FETCH_MODELS', provider: settings.activeProvider })
     await loadSettings()
-    showToast('Model catalog updated')
+    showToast('Daftar model diperbarui')
   } catch (error) {
     showToast(messageFromError(error), true)
   } finally {
@@ -527,7 +595,7 @@ async function testProvider(): Promise<void> {
   setBusy('test-provider', true)
   try {
     const result = await sendMessage<{ connected: true; modelCount: number }>({ type: 'TEST_PROVIDER', provider: settings.activeProvider })
-    showToast(`Connected · ${result.modelCount} models`)
+    showToast(`Terhubung · ${result.modelCount} model`)
     await loadSettings()
   } catch (error) {
     showToast(messageFromError(error), true)
@@ -545,7 +613,7 @@ async function connectPinterest(): Promise<void> {
     await sendMessage({ type: 'CONNECT_PINTEREST' })
     await loadSettings()
     await loadPinterestBoards(false)
-    showToast('Pinterest OAuth connected')
+    showToast('Akun Pinterest terhubung')
   } catch (error) {
     showToast(messageFromError(error), true)
   } finally {
@@ -554,17 +622,33 @@ async function connectPinterest(): Promise<void> {
 }
 
 async function disconnectPinterest(): Promise<void> {
-  if (!window.confirm('Disconnect Pinterest and remove locally stored OAuth tokens?')) return
+  if (!window.confirm('Putuskan Pinterest dan hapus token OAuth yang tersimpan di perangkat ini?')) return
   setBusy('disconnect-pinterest', true)
   try {
     await sendMessage({ type: 'DISCONNECT_PINTEREST' })
     pinterestBoards = []
     await loadSettings()
-    showToast('Pinterest disconnected')
+    showToast('Akun Pinterest terputus')
   } catch (error) {
     showToast(messageFromError(error), true)
   } finally {
     setBusy('disconnect-pinterest', false)
+  }
+}
+
+async function loadShopeeCategories(): Promise<void> {
+  setBusy('load-categories', true)
+  element('category-list-state').textContent = 'Membaca tab kategori di Penawaran Produk Shopee...'
+  try {
+    const categories = await sendMessage<ShopeeCategory[]>({ type: 'LIST_SHOPEE_CATEGORIES' })
+    if (categories.length === 0) throw new Error('Tab kategori tidak ditemukan. Buka halaman Penawaran Produk Shopee lalu coba lagi.')
+    element<HTMLDataListElement>('shopee-categories').replaceChildren(...categories.map((category) => option(category.label, category.label)))
+    element('category-list-state').textContent = `${categories.length} tab tersedia. Pilih dari daftar atau ketik nama tab yang tampil di Shopee.`
+  } catch (error) {
+    element('category-list-state').textContent = messageFromError(error)
+    showToast(messageFromError(error), true)
+  } finally {
+    setBusy('load-categories', false)
   }
 }
 
@@ -594,7 +678,7 @@ async function createPinterestBoard(): Promise<void> {
   if (!settings) return
   captureCurrentProviderFields()
   if (!await persistSettings(false)) return
-  if (!window.confirm('Create this Board on the connected Pinterest account?')) return
+  if (!window.confirm('Buat Board ini pada akun Pinterest yang terhubung?')) return
   setBusy('create-board', true)
   try {
     const result = await sendMessage<{ id: string; name: string }>({
@@ -605,7 +689,7 @@ async function createPinterestBoard(): Promise<void> {
     await loadSettings()
     await loadPinterestBoards(false)
     element('board-list-state').textContent = `Board berhasil dibuat dan dipilih: ${result.name}`
-    showToast(`Board created · ${result.id}`)
+    showToast(`Board dibuat · ${result.id}`)
   } catch (error) {
     element('board-list-state').textContent = messageFromError(error)
     showToast(messageFromError(error), true)
@@ -629,7 +713,8 @@ function toggleApiKey(): void {
   const button = element<HTMLButtonElement>('toggle-key')
   input.type = input.type === 'password' ? 'text' : 'password'
   button.innerHTML = `<i data-lucide="${input.type === 'password' ? 'eye' : 'eye-off'}"></i>`
-  button.title = input.type === 'password' ? 'Show API key' : 'Hide API key'
+  button.title = input.type === 'password' ? 'Tampilkan API key' : 'Sembunyikan API key'
+  button.setAttribute('aria-label', button.title)
   createIcons({ icons: iconSet, root: button })
 }
 
@@ -654,7 +739,22 @@ function showToast(message: string, isError = false): void {
 }
 
 function readableState(state: string): string {
-  return state.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+  const labels: Record<string, string> = {
+    idle: 'Siap', stopped: 'Berhenti', paused: 'Dijeda', awaiting_approval: 'Menunggu persetujuan',
+    await_publish_slot: 'Menunggu terbit', daily_limit_reached: 'Batas harian tercapai',
+    authentication_required: 'Perlu login', captcha_detected: 'Perlu verifikasi', circuit_open: 'Dihentikan sementara',
+    preflight: 'Pemeriksaan awal', discover_products: 'Mencari produk', generate_copy: 'Membuat teks',
+    render_poster: 'Membuat poster', publish_pinterest: 'Menerbitkan Pin', verify_publication: 'Memverifikasi Pin',
+  }
+  return labels[state] ?? state.replaceAll('_', ' ')
+}
+
+function displayStatusMessage(status: RuntimeStatus): string {
+  if (status.state === 'idle') return 'Siap memulai batch'
+  const batch = status.message.match(/^(\d+) prepared drafts ready for batch review$/)
+  if (batch) return `${batch[1]} draft siap ditinjau bersama`
+  if (status.message === 'Waiting for the next randomized publication slot') return 'Pin yang disetujui menunggu giliran terbit'
+  return status.message
 }
 
 function formatTime(timestamp: number): string {
@@ -664,7 +764,7 @@ function formatTime(timestamp: number): string {
 function formatFuture(timestamp: number): string {
   const difference = Math.max(0, timestamp - Date.now())
   const minutes = Math.ceil(difference / 60_000)
-  return `${formatTime(timestamp)} · ${minutes} min`
+  return `${formatTime(timestamp)} · ${minutes} menit`
 }
 
 function option(value: string, label: string): HTMLOptionElement {

@@ -11,6 +11,7 @@ export type ExtensionMessage =
   | { type: 'DISCONNECT_PINTEREST' }
   | { type: 'LIST_PINTEREST_BOARDS' }
   | { type: 'CREATE_PINTEREST_BOARD'; name: string; description: string }
+  | { type: 'LIST_SHOPEE_CATEGORIES' }
   | { type: 'START_AUTOMATION' }
   | { type: 'PAUSE_AUTOMATION' }
   | { type: 'RESUME_AUTOMATION' }
@@ -20,7 +21,8 @@ export type ExtensionMessage =
   | { type: 'UPDATE_PIN_DRAFT'; productId: string; title: string; description: string; altText: string }
   | { type: 'STOP_AUTOMATION' }
   | { type: 'SHOPEE_PREFLIGHT' }
-  | { type: 'SHOPEE_DISCOVER'; maxPages: number; maxProducts: number; affiliateTags?: string[] }
+  | { type: 'SHOPEE_CATEGORIES' }
+  | { type: 'SHOPEE_DISCOVER'; maxPages: number; maxProducts: number; category?: string; keywords?: string; affiliateTags?: string[] }
   | { type: 'SHOPEE_EXTRACT'; candidate: ProductCandidate }
   | { type: 'SHOPEE_GENERATE_LINK'; productId: string; affiliateTags?: string[] }
   | { type: 'RENDER_POSTER'; product: ProductCandidate; headline: string; visualTone: string; accentPreference: string }

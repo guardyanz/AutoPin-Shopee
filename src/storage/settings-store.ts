@@ -38,6 +38,8 @@ function enforceComplianceDefaults(settings: AutomationSettings): AutomationSett
   return {
     ...settings,
     discoveryMaxPages: clampInteger(settings.discoveryMaxPages, 1, 10, 3),
+    productCategory: String(settings.productCategory ?? '').trim().slice(0, 80),
+    productKeywords: String(settings.productKeywords ?? '').trim().slice(0, 100),
     affiliateTags,
     pinterestEnvironment: settings.pinterestEnvironment === 'production' ? 'production' : 'sandbox',
     pinterestOAuthWorkerUrl: String(settings.pinterestOAuthWorkerUrl ?? '').trim().replace(/\/$/, ''),
@@ -47,7 +49,8 @@ function enforceComplianceDefaults(settings: AutomationSettings): AutomationSett
       ? settings.pinterestTokenExpiresAt
       : null,
     pinterestBoardId: String(settings.pinterestBoardId ?? '').trim(),
-    dailyLimit: 10,
+    dailyLimit: 100,
+    batchSize: clampInteger(settings.batchSize, 1, 100, 10),
     minimumWindowHours: 8,
     maximumWindowHours: 12,
     disclosure: '#affiliate',

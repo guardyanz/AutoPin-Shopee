@@ -4,7 +4,8 @@ import { DEFAULT_SETTINGS, validateAffiliateTags, validateSettingsForStart } fro
 
 describe('automation settings', () => {
   it('keeps the approved compliance limits immutable in defaults', () => {
-    expect(DEFAULT_SETTINGS.dailyLimit).toBe(10)
+    expect(DEFAULT_SETTINGS.dailyLimit).toBe(100)
+    expect(DEFAULT_SETTINGS.batchSize).toBe(10)
     expect(DEFAULT_SETTINGS.minimumWindowHours).toBe(8)
     expect(DEFAULT_SETTINGS.maximumWindowHours).toBe(12)
     expect(DEFAULT_SETTINGS.disclosure).toBe('#affiliate')

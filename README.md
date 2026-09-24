@@ -24,11 +24,11 @@ Shopee yang terinspirasi dan diadaptasi dari
 - Merender poster Pinterest 1000 × 1500 secara lokal tanpa mengubah bentuk
   produk secara generatif.
 - Memvalidasi Board milik akun terautentikasi, menampilkan ringkasan visual setiap
-  draft, meminta pengguna memilih tiap Pin yang diinginkan, lalu menerima satu
+  draft, memberi pilihan pilih semua atau memilih Pin tertentu, lalu menerima satu
   konfirmasi untuk batch terpilih sebelum membuat Pin melalui `POST /v5/pins` dan memverifikasi hasil.
 - Menyimpan checkpoint di IndexedDB, melanjutkan pekerjaan setelah browser hidup
   kembali, mencegah produk yang sama dipakai ulang selama 30 hari, dan membatasi
-  publikasi sampai 10 Pin per hari.
+  publikasi sampai 100 Pin per hari (batas aplikasi; batas API Pinterest tetap berlaku).
 - Menyediakan mode **Developer dry run** yang berhenti sebelum request Create Pin.
 
 ## Arsitektur singkat
@@ -39,7 +39,7 @@ Shopee Affiliate pages
   → product detail + HD image
   → official affiliate shortlink
   → validated AI copy + local poster
-  → batch review + pemilihan eksplisit setiap Pin + satu konfirmasi
+  → galeri batch + pilih semua atau pilih sebagian + satu konfirmasi
   → Pinterest API v5 create + verification
   → local publication history
 ```
@@ -67,25 +67,31 @@ Gunakan profil Chrome khusus otomasi, lalu login manual ke:
 ## Konfigurasi dan penggunaan
 
 1. Buka side panel **AutoPin Shopee**.
-2. Di tab **Settings**, pilih provider AI dan isi API key.
-3. Klik **Fetch Models**, pilih model utama, dan simpan.
+2. Di tab **Pengaturan**, pilih penyedia AI dan isi API key.
+3. Klik **Muat model**, pilih model utama, dan simpan.
 4. Pilih environment yang menerbitkan token Pinterest Anda: token Sandbox untuk
    **Sandbox**, atau product-limited Trial/Standard token untuk **Production**.
 5. Klik **Muat Board dari Pinterest**, lalu pilih Board dari daftar. Untuk membuat
-   Board baru, isi nama/deskripsi dan klik **Create this Board through API**.
-6. Tentukan jumlah halaman Shopee yang akan dipindai (1–10). Isi tag pelacakan
-   opsional, dipisahkan koma, jika ingin melacak performa link di Shopee.
+   Board baru, isi nama/deskripsi dan klik **Buat Board melalui API**.
+6. Tentukan jumlah halaman Shopee yang akan dipindai (1–10), ukuran batch
+   (1–100), serta tab kategori Shopee. Klik **Muat kategori** saat halaman
+   Penawaran Produk terbuka, kemudian pilih nama tab yang tersedia. Kata kunci
+   produk bersifat opsional: setiap kata harus ada pada judul produk. Untuk tema
+   Board yang sempit, pakai kategori dan kata kunci bersamaan; untuk tema luas,
+   cukup kategori. Isi tag pelacakan opsional, dipisahkan koma, bila perlu.
 7. Biarkan **Developer dry run** aktif untuk percobaan pertama.
-8. Klik **Start**. Setelah draft batch siap, poster, copy, Board, dan link
-   langsung tampak pada kartu review. Centang setiap Pin yang ingin diterbitkan;
-   tidak ada Pin yang terpilih otomatis. **Detail / Edit** bersifat opsional
-   untuk melihat ukuran penuh atau mengubah teks. Gunakan **Pause**
+8. Klik **Mulai**. Setelah draft batch siap, poster, copy, Board, dan link
+   tampak pada galeri review. Klik **Pilih semua Pin** untuk memilih seluruh draft
+   siap sekaligus, atau centang hanya Pin tertentu. Tidak ada Pin yang terpilih
+   otomatis. **Detail / Edit** bersifat opsional untuk melihat ukuran penuh atau
+   mengubah teks. Gunakan **Jeda**
    bila ingin melanjutkan review nanti; draft tetap tersimpan. **Stop** akan
    membuang draft yang belum diterbitkan setelah konfirmasi.
-9. Nonaktifkan dry run, lalu tekan **Approve selected Pins** satu kali. Hanya Pin
-   yang dicentang dipublikasikan langsung berurutan dengan jeda sekitar 10 detik.
+9. Nonaktifkan uji tanpa publikasi, lalu tekan **Setujui Pin pilihan** satu kali. Periksa
+   daftar Pin yang tampil di dialog dan konfirmasikan. Hanya Pin yang dipilih
+   dipublikasikan langsung berurutan dengan jeda sekitar 10 detik.
    Jika batch lama masih menunggu jadwal berjam-jam, klik **Terbitkan sisa sekarang**.
-   Lihat hasilnya di **Recent pins** dan **Activity**.
+   Lihat hasilnya di **Pin terbaru** dan **Aktivitas**.
 
 Jika menggunakan token Trial sementara, periksa masa berlakunya sebelum batch
 dimulai; token yang kedaluwarsa akan menghentikan posting sampai diganti.
@@ -118,12 +124,12 @@ memberikan token ke extension melalui one-time ticket singkat.
 
 Workflow berhenti bila menemukan login kedaluwarsa, CAPTCHA, kuota harian, atau
 tiga kegagalan produk berturut-turut. Selesaikan tindakan manual yang diperlukan,
-periksa tab **Activity**, lalu pilih **Resume**.
+periksa tab **Aktivitas**, lalu pilih **Lanjutkan**.
 
 Jika skrip ekstensi belum terpasang pada tab Shopee Affiliate setelah ekstensi
 di-reload, AutoPin memuat ulang tab tersebut dan mencoba menghubungkannya kembali.
 Jika koneksi tetap gagal, Dashboard menampilkan pesan aslinya; muat ulang tab
-Shopee Affiliate secara manual dan klik **Start** lagi.
+Shopee Affiliate secara manual dan klik **Mulai** lagi.
 
 DOM Shopee dan Pinterest dapat berubah sewaktu-waktu. Jalankan dry run setelah
 setiap perubahan besar pada situs dan patuhi ketentuan Shopee Affiliate serta
